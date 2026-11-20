@@ -40,6 +40,17 @@ GOST Runtime；Reconciler 根据持久状态恢复或清理服务。完整说明
 
 ## 快速开始
 
+Debian 12 amd64 全新服务器可使用[一键安装器](docs/installation/one-command.md)：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/torr9522/dx-3fv/main/scripts/install.sh)
+```
+
+当前 Release Candidate 默认使用固定 `v1.0.0-rc.3` 原生包和 SHA256；正式稳定版发布
+后默认值才会切换到固定 `v1.0.0` Tag。
+
+手工原生安装：
+
 1. 下载同一版本的二进制发布包和源码包，并校验旁边的 `.sha256`。
 2. 阅读[原生安装](docs/installation/native.md)，准备 Debian 12/兼容 Linux、systemd、
    Caddy、SQLite CLI、OpenSSL 与 CA bundle。
