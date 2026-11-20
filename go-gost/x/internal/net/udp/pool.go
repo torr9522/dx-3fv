@@ -48,6 +48,25 @@ func (p *connPool) Set(key any, c *conn) {
 	p.m.Store(key, c)
 }
 
+func (p *connPool) LoadOrStore(key any, c *conn) (*conn, bool) {
+	if p == nil {
+		return nil, false
+	}
+	v, loaded := p.m.LoadOrStore(key, c)
+	if actual, ok := v.(*conn); ok {
+		return actual, loaded
+	}
+	return nil, loaded
+}
+
+func (p *connPool) CompareAndSwap(key any, old, new *conn) bool {
+	return p != nil && p.m.CompareAndSwap(key, old, new)
+}
+
+func (p *connPool) CompareAndDelete(key any, c *conn) bool {
+	return p != nil && p.m.CompareAndDelete(key, c)
+}
+
 func (p *connPool) Delete(key any) {
 	if p == nil {
 		return
@@ -93,14 +112,11 @@ func (p *connPool) idleCheck() {
 				}
 				size++
 
-				if c.IsIdle() {
+				if c.expireIfIdle() {
 					idles++
-					p.Delete(key)
-					c.Close()
+					p.CompareAndDelete(key, c)
 					return true
 				}
-
-				c.SetIdle(true)
 
 				return true
 			})

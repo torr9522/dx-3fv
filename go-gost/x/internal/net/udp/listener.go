@@ -80,14 +80,21 @@ func (ln *listener) listenLoop() {
 			return
 		}
 
-		c := ln.getConn(raddr)
-		if c == nil {
-			bufpool.Put(b)
-			continue
+		var enqueueErr error
+		for attempt := 0; attempt < 2; attempt++ {
+			c := ln.getConn(raddr)
+			if c == nil {
+				enqueueErr = errors.New("connection queue is full")
+				break
+			}
+			enqueueErr = c.WriteQueue(b[:n])
+			if !errors.Is(enqueueErr, net.ErrClosed) {
+				break
+			}
 		}
-
-		if err := c.WriteQueue(b[:n]); err != nil {
-			ln.config.Logger.Warn("data discarded: ", err)
+		if enqueueErr != nil {
+			bufpool.Put(b)
+			ln.config.Logger.Warn("data discarded: ", enqueueErr)
 		}
 	}
 }
@@ -123,21 +130,36 @@ func (ln *listener) getConn(raddr net.Addr) *conn {
 	if packet != nil {
 		key += "|" + strconv.Itoa(packet.ifIndex)
 	}
-	c, ok := ln.connPool.Get(key)
-	if ok && !c.isClosed() {
-		return c
-	}
+	for {
+		previous, loaded := ln.connPool.Get(key)
+		if loaded && !previous.isClosed() {
+			return previous
+		}
 
-	c = newConn(ln.conn, laddr, peer, ln.config.ReadQueueSize, ln.config.Keepalive)
-	c.packet = packet
-	select {
-	case ln.cqueue <- c:
-		ln.connPool.Set(key, c)
-		return c
-	default:
-		c.Close()
-		ln.config.Logger.Warnf("connection queue is full, client %s discarded", raddr)
-		return nil
+		candidate := newConn(ln.conn, laddr, peer, ln.config.ReadQueueSize, ln.config.Keepalive)
+		candidate.packet = packet
+		if loaded {
+			if !ln.connPool.CompareAndSwap(key, previous, candidate) {
+				candidate.Close()
+				continue
+			}
+		} else if actual, exists := ln.connPool.LoadOrStore(key, candidate); exists {
+			candidate.Close()
+			if actual != nil && !actual.isClosed() {
+				return actual
+			}
+			continue
+		}
+
+		select {
+		case ln.cqueue <- candidate:
+			return candidate
+		default:
+			ln.connPool.CompareAndDelete(key, candidate)
+			candidate.Close()
+			ln.config.Logger.Warnf("connection queue is full, client %s discarded", raddr)
+			return nil
+		}
 	}
 }
 
@@ -235,6 +257,12 @@ func (c *conn) IsIdle() bool {
 }
 
 func (c *conn) SetIdle(idle bool) {
+	c.closeMutex.Lock()
+	defer c.closeMutex.Unlock()
+	c.setIdle(idle)
+}
+
+func (c *conn) setIdle(idle bool) {
 	v := int32(0)
 	if idle {
 		v = 1
@@ -242,15 +270,36 @@ func (c *conn) SetIdle(idle bool) {
 	atomic.StoreInt32(&c.idle, v)
 }
 
-func (c *conn) WriteQueue(b []byte) error {
-	select {
-	case c.rc <- b:
-		c.SetIdle(false)
-		return nil
+func (c *conn) expireIfIdle() bool {
+	c.closeMutex.Lock()
+	defer c.closeMutex.Unlock()
 
+	select {
+	case <-c.closed:
+		return true
+	default:
+	}
+	if c.IsIdle() {
+		close(c.closed)
+		return true
+	}
+	c.setIdle(true)
+	return false
+}
+
+func (c *conn) WriteQueue(b []byte) error {
+	c.closeMutex.Lock()
+	defer c.closeMutex.Unlock()
+
+	select {
 	case <-c.closed:
 		return net.ErrClosed
-
+	default:
+	}
+	select {
+	case c.rc <- b:
+		c.setIdle(false)
+		return nil
 	default:
 		return errors.New("recv queue is full")
 	}

@@ -1,13 +1,15 @@
 # Release Candidate 已知问题
 
-## 前海 UDP 会话陈旧风险
+## 前海 UDP 历史会话陈旧风险
 
-持续回归曾两次出现前海 UDP 业务 timeout；同一 Landing 的 QIX UDP 正常，只重启
-广州入口 Agent 后前海恢复。现有证据指向入口侧 UDP Association/会话陈旧方向，
-但没有定位到精确代码根因。最终 v0.1.48 单轮回归通过，不能据此关闭历史风险。
+历史持续回归曾两次出现前海 UDP 业务 timeout；同一 Landing 的 QIX UDP 正常，只重启
+广州入口 Agent 后恢复。DX3FV-0058 已用确定性失败测试定位到 UDP conn 关闭/到期与
+datagram 入队竞态，并完成有针对性的 session lifecycle 修复。canary 的 450/450 UDP、
+70 秒空闲后首包和两轮删除重建均通过。
 
-本 RC 不对 GOST 核心 Runtime 做推测性修改。出现时应保存时间线、Runtime/Agent
-状态和端口证据，再按运维指南恢复。
+这些证据关闭已复现竞态，不等于小时级或无限期无故障证明。小时级持续流量仍由
+DX3FV-0060 单独验收；若再次出现 timeout，必须保留请求时间线、PID、socket、session
+和 Runtime 状态，不能用周期重启掩盖新问题。
 
 ## 稳定性覆盖有限
 

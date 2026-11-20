@@ -32,3 +32,4 @@ Latest release-preparation issues:
 - `DX3FV-0055-debian-one-command-installer.md`
 - `DX3FV-0056-publication-generated-grpc-source.md`
 - `DX3FV-0057-multiport-create-scope.md`
+- `DX3FV-0058-udp-session-expiry-race.md`
