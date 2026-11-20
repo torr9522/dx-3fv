@@ -146,6 +146,42 @@ func createIXRouteThroughHandler(t *testing.T, agent *cleanupAgent, profileID in
 	return &payload.Data
 }
 
+func TestIXRouteScopedCreateRejectsCrossPathTamperingWithoutResidue(t *testing.T) {
+	agent, profile := setupIXRouteControlPlane(t)
+	scopeID := profile.ID + 1000
+	recorder := httptest.NewRecorder()
+	request := ixPortRequest(t, http.MethodPost, "/api/v1/ix-route/create", map[string]interface{}{
+		"pathProfileId": profile.ID, "scopePathProfileId": scopeID,
+		"name": "tampered", "entryPort": 0, "ixPort": 0,
+		"landingHost": "127.0.0.1", "landingPort": 8080, "protocolMode": "tcp",
+	}, 0)
+	agent.h.ixRouteCreate(recorder, request)
+	if code := ixPortResponseCode(t, recorder); code == 0 {
+		t.Fatalf("cross-path scoped create unexpectedly succeeded: %s", recorder.Body.String())
+	}
+	routes, err := agent.h.repo.ListIXRoutes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) != 0 {
+		t.Fatalf("rejected scoped create left routes: %+v", routes)
+	}
+	leases, err := agent.h.repo.ListIXPortLeases("", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(leases) != 0 {
+		t.Fatalf("rejected scoped create left leases: %+v", leases)
+	}
+	var runtimeCount int64
+	if err := agent.h.repo.DB().Model(&model.IXRouteRuntime{}).Count(&runtimeCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if runtimeCount != 0 {
+		t.Fatalf("rejected scoped create left %d runtimes", runtimeCount)
+	}
+}
+
 func mutateIXRouteThroughHandler(t *testing.T, handler func(http.ResponseWriter, *http.Request), path string, id int64) {
 	t.Helper()
 	recorder := httptest.NewRecorder()

@@ -733,6 +733,7 @@ export type IXPathProfileMutation = Omit<
 
 export interface IXRouteCreatePayload {
   pathProfileId: number;
+  scopePathProfileId?: number;
   name: string;
   entryPort: number;
   ixPort: number;
@@ -741,7 +742,10 @@ export interface IXRouteCreatePayload {
   protocolMode: IXRouteApiItem["protocolMode"];
 }
 
-export type IXRouteUpdatePayload = IXRouteCreatePayload & { id: number };
+export type IXRouteUpdatePayload = Omit<
+  IXRouteCreatePayload,
+  "scopePathProfileId"
+> & { id: number };
 
 export interface IXRouteProbeLegApiItem {
   protocol: "tcp" | "udp";

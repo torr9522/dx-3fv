@@ -86,3 +86,46 @@ func TestIXPathProfileIdentityUpdateProtectsActiveBusinesses(t *testing.T) {
 		t.Fatalf("unsafe update partially changed profile: %+v", stored)
 	}
 }
+
+func TestValidateIXPathProfileForRouteRequiresActiveCompatibleResources(t *testing.T) {
+	r := openIXPortTestRepo(t)
+	entry := createIXTestPool(t, r, 141, "entry", IXPoolKindFull, 1, 65535)
+	ix := createIXTestPool(t, r, 142, "ix", IXPoolKindNAT, 38000, 38099)
+	resource := &model.IXPortResource{
+		PoolID: ix.ID, NodeID: 142, PublicPort: 38001, InternalPort: 30001,
+		TCPMapped: true, UDPMapped: false, VerificationStatus: "verified",
+	}
+	if err := r.SaveIXPortResource(resource); err != nil {
+		t.Fatal(err)
+	}
+	profile := &model.IXPathProfile{Name: "scoped", EntryNodeID: 141, IXNodeID: 142, EntryPoolID: entry.ID, IXPoolID: ix.ID}
+	if err := r.CreateIXPathProfile(profile); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ValidateIXPathProfileForRoute(profile.ID, []string{"tcp"}); err != nil {
+		t.Fatalf("TCP-compatible path rejected: %v", err)
+	}
+	if _, err := r.ValidateIXPathProfileForRoute(profile.ID, []string{"udp"}); err == nil {
+		t.Fatal("UDP route accepted a TCP-only IX resource")
+	}
+
+	profile.Status = 0
+	if err := r.UpdateIXPathProfile(profile); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ValidateIXPathProfileForRoute(profile.ID, []string{"tcp"}); err == nil {
+		t.Fatal("disabled PathProfile remained available")
+	}
+
+	profile.Status = 1
+	if err := r.UpdateIXPathProfile(profile); err != nil {
+		t.Fatal(err)
+	}
+	ix.Status = 0
+	if err := r.UpdateIXPortPool(ix); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ValidateIXPathProfileForRoute(profile.ID, []string{"tcp"}); err == nil {
+		t.Fatal("disabled IX pool remained available")
+	}
+}

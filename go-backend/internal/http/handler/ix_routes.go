@@ -20,14 +20,15 @@ const ixRouteOwnerEntry = "ix_route_entry"
 const ixRouteOwnerIX = "ix_route_ix"
 
 type ixRouteCreateRequest struct {
-	ID            int64  `json:"id"`
-	PathProfileID int64  `json:"pathProfileId"`
-	Name          string `json:"name"`
-	EntryPort     int    `json:"entryPort"`
-	IXPort        int    `json:"ixPort"`
-	LandingHost   string `json:"landingHost"`
-	LandingPort   int    `json:"landingPort"`
-	ProtocolMode  string `json:"protocolMode"`
+	ID                 int64  `json:"id"`
+	PathProfileID      int64  `json:"pathProfileId"`
+	ScopePathProfileID *int64 `json:"scopePathProfileId,omitempty"`
+	Name               string `json:"name"`
+	EntryPort          int    `json:"entryPort"`
+	IXPort             int    `json:"ixPort"`
+	LandingHost        string `json:"landingHost"`
+	LandingPort        int    `json:"landingPort"`
+	ProtocolMode       string `json:"protocolMode"`
 }
 
 const ixRouteMigrationOwnerEntry = "ix_route_migration_entry"
@@ -136,6 +137,15 @@ func (h *Handler) ixRouteCreate(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, response.Err(500, err.Error()))
 		return
 	}
+	if request.ScopePathProfileID != nil && (*request.ScopePathProfileID <= 0 || *request.ScopePathProfileID != request.PathProfileID) {
+		response.WriteJSON(w, response.Err(500, "分组路径与提交路径不一致"))
+		return
+	}
+	profile, err := h.repo.ValidateIXPathProfileForRoute(request.PathProfileID, protocols)
+	if err != nil {
+		response.WriteJSON(w, response.Err(-2, err.Error()))
+		return
+	}
 	request.LandingHost = strings.Trim(strings.TrimSpace(request.LandingHost), "[]")
 	if request.LandingHost == "" || strings.ContainsAny(request.LandingHost, "/?#") {
 		response.WriteJSON(w, response.Err(500, "Landing IP 或域名无效"))
@@ -148,12 +158,6 @@ func (h *Handler) ixRouteCreate(w http.ResponseWriter, r *http.Request) {
 	route := &model.IXRoute{PathProfileID: request.PathProfileID, Name: request.Name, LandingHost: request.LandingHost, LandingPort: request.LandingPort, ProtocolMode: request.ProtocolMode}
 	if err := h.repo.CreateIXRoute(route); err != nil {
 		response.WriteJSON(w, response.Err(-2, err.Error()))
-		return
-	}
-	profile, err := h.repo.GetIXPathProfile(route.PathProfileID)
-	if err != nil || profile == nil {
-		_ = h.repo.SetIXRouteState(route.ID, "deleted", "error", "path profile not found")
-		response.WriteJSON(w, response.Err(-2, "路径不存在"))
 		return
 	}
 	entryAllocation, err := h.repo.AllocateIXPorts(repo.IXPortAllocationRequest{PoolID: profile.EntryPoolID, RequestedPort: request.EntryPort, Protocols: protocols, OwnerType: ixRouteOwnerEntry, OwnerID: route.ID, Manual: request.EntryPort > 0})

@@ -22,6 +22,7 @@ import {
   deleteIXRoute,
   getIXPathProfiles,
   getIXPortPools,
+  getIXPortResources,
   getIXRoutes,
   getNodeList,
   pauseIXRoute,
@@ -31,6 +32,7 @@ import {
   updateIXRoute,
   type IXPathProfileApiItem,
   type IXPortPoolApiItem,
+  type IXPortResourceApiItem,
   type IXRouteApiItem,
   type IXRouteDiagnosisApiItem,
 } from "@/api";
@@ -94,6 +96,12 @@ const protocolLabel: Record<IXRouteApiItem["protocolMode"], string> = {
   tcp_udp: "TCP+UDP",
 };
 
+const protocolModes: IXRouteApiItem["protocolMode"][] = [
+  "tcp",
+  "udp",
+  "tcp_udp",
+];
+
 const statusColor = (state: string) => {
   if (state === "active") return "success";
   if (state === "paused") return "warning";
@@ -115,6 +123,9 @@ export default function MultiportPage() {
   const [busyRouteId, setBusyRouteId] = useState(0);
   const [nodes, setNodes] = useState<NodeOption[]>([]);
   const [pools, setPools] = useState<IXPortPoolApiItem[]>([]);
+  const [resourcesByPool, setResourcesByPool] = useState<
+    Map<number, IXPortResourceApiItem[]>
+  >(new Map());
   const [paths, setPaths] = useState<IXPathProfileApiItem[]>([]);
   const [routes, setRoutes] = useState<IXRouteApiItem[]>([]);
   const [pathModalOpen, setPathModalOpen] = useState(false);
@@ -132,6 +143,7 @@ export default function MultiportPage() {
   const [payloadEcho, setPayloadEcho] = useState(false);
   const [pathForm, setPathForm] = useState(emptyPathForm);
   const [routeForm, setRouteForm] = useState(emptyRouteForm);
+  const [routeScopePathId, setRouteScopePathId] = useState<number | null>(null);
   const [collapsedPaths, setCollapsedPaths] =
     useLocalStorageState<CollapsedPathMap>(
       "dx3fv-multiport-collapsed-paths",
@@ -142,6 +154,47 @@ export default function MultiportPage() {
     () => new Map(nodes.map((node) => [node.id, node])),
     [nodes],
   );
+  const poolById = useMemo(
+    () => new Map(pools.map((pool) => [pool.id, pool])),
+    [pools],
+  );
+  const pathSupportsMode = (
+    path: IXPathProfileApiItem,
+    mode: IXRouteApiItem["protocolMode"],
+  ) => {
+    const entryPool = poolById.get(path.entryPoolId);
+    const ixPool = poolById.get(path.ixPoolId);
+
+    if (
+      path.status !== 1 ||
+      !nodeById.has(path.entryNodeId) ||
+      !nodeById.has(path.ixNodeId) ||
+      !entryPool ||
+      !ixPool ||
+      entryPool.status !== 1 ||
+      ixPool.status !== 1 ||
+      entryPool.kind !== "full" ||
+      entryPool.nodeId !== path.entryNodeId ||
+      ixPool.nodeId !== path.ixNodeId
+    ) {
+      return false;
+    }
+    if (ixPool.kind === "full") return true;
+
+    return (resourcesByPool.get(ixPool.id) || []).some(
+      (resource) =>
+        !resource.excluded &&
+        resource.verificationStatus === "verified" &&
+        (mode === "udp" || resource.tcpMapped) &&
+        (mode === "tcp" || resource.udpMapped),
+    );
+  };
+  const availableRoutePaths = paths.filter((path) =>
+    pathSupportsMode(path, routeForm.protocolMode),
+  );
+  const scopedRoutePath = routeScopePathId
+    ? paths.find((path) => path.id === routeScopePathId)
+    : undefined;
   const routesByPath = useMemo(() => {
     const grouped = new Map<number, IXRouteApiItem[]>();
 
@@ -178,6 +231,19 @@ export default function MultiportPage() {
       setRoutes(routeResponse.data || []);
       setPools(poolResponse.data || []);
       setNodes((nodeResponse.data || []) as NodeOption[]);
+      const resourceEntries = await Promise.all(
+        (poolResponse.data || [])
+          .filter((pool) => pool.kind === "nat")
+          .map(async (pool) => {
+            const response = await getIXPortResources(pool.id);
+
+            if (response.code !== 0) throw new Error(response.msg);
+
+            return [pool.id, response.data || []] as const;
+          }),
+      );
+
+      setResourcesByPool(new Map(resourceEntries));
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "加载多端口业务失败",
@@ -248,12 +314,33 @@ export default function MultiportPage() {
     await loadAll();
   };
 
-  const openNewRoute = (pathId: number) => {
-    setRouteForm({ ...emptyRouteForm, pathProfileId: pathId });
+  const openGlobalNewRoute = () => {
+    setRouteScopePathId(null);
+    setRouteForm(emptyRouteForm);
+    setRouteModalOpen(true);
+  };
+
+  const openScopedNewRoute = (path: IXPathProfileApiItem) => {
+    const supportedModes = protocolModes.filter((mode) =>
+      pathSupportsMode(path, mode),
+    );
+
+    if (supportedModes.length === 0) {
+      toast.error("当前路径没有可用的协议端口资源");
+
+      return;
+    }
+    const protocolMode = supportedModes.includes("tcp_udp")
+      ? "tcp_udp"
+      : supportedModes[0];
+
+    setRouteScopePathId(path.id);
+    setRouteForm({ ...emptyRouteForm, pathProfileId: path.id, protocolMode });
     setRouteModalOpen(true);
   };
 
   const openEditRoute = (route: IXRouteApiItem) => {
+    setRouteScopePathId(null);
     setRouteForm({
       id: route.id,
       pathProfileId: route.pathProfileId,
@@ -313,6 +400,9 @@ export default function MultiportPage() {
       landingHost: routeForm.landingHost.trim(),
       landingPort,
       protocolMode: routeForm.protocolMode,
+      ...(routeScopePathId && !routeForm.id
+        ? { scopePathProfileId: routeScopePathId }
+        : {}),
     };
     const response = routeForm.id
       ? await updateIXRoute({ ...payload, id: routeForm.id })
@@ -468,6 +558,13 @@ export default function MultiportPage() {
           <Button
             color="primary"
             startContent={<Plus className="w-4 h-4" />}
+            onPress={openGlobalNewRoute}
+          >
+            新增业务
+          </Button>
+          <Button
+            color="primary"
+            startContent={<Plus className="w-4 h-4" />}
             onPress={openNewPath}
           >
             新增路径
@@ -558,7 +655,7 @@ export default function MultiportPage() {
                       color="primary"
                       isDisabled={path.status !== 1}
                       startContent={<Plus className="w-4 h-4" />}
-                      onPress={() => openNewRoute(path.id)}
+                      onPress={() => openScopedNewRoute(path)}
                     >
                       新增业务
                     </Button>
@@ -823,34 +920,49 @@ export default function MultiportPage() {
       <Modal
         isOpen={routeModalOpen}
         scrollBehavior="inside"
-        onOpenChange={setRouteModalOpen}
+        onOpenChange={(open) => {
+          setRouteModalOpen(open);
+          if (!open) setRouteScopePathId(null);
+        }}
       >
         <ModalContent>
           <ModalHeader>
             {routeForm.id ? "编辑多端口业务" : "新增多端口业务"}
           </ModalHeader>
           <ModalBody className="space-y-4">
-            <Select
-              isDisabled={routeForm.id > 0}
-              label="前置入口 → IX 路径"
-              selectedKeys={
-                routeForm.pathProfileId ? [String(routeForm.pathProfileId)] : []
-              }
-              onSelectionChange={(keys) =>
-                setRouteForm((form) => ({
-                  ...form,
-                  pathProfileId: Number(Array.from(keys)[0]),
-                }))
-              }
-            >
-              {paths
-                .filter((path) => path.status === 1)
-                .map((path) => (
+            {routeScopePathId && !routeForm.id ? (
+              <div
+                className="rounded-md border border-divider px-3 py-2"
+                data-testid="scoped-path-profile"
+              >
+                <div className="text-xs text-default-500">当前路径</div>
+                <div className="mt-1 text-sm font-medium">
+                  {scopedRoutePath?.name || `PathProfile #${routeScopePathId}`}
+                </div>
+              </div>
+            ) : (
+              <Select
+                isDisabled={routeForm.id > 0}
+                label="前置入口 → IX 路径"
+                selectedKeys={
+                  routeForm.pathProfileId
+                    ? [String(routeForm.pathProfileId)]
+                    : []
+                }
+                onSelectionChange={(keys) =>
+                  setRouteForm((form) => ({
+                    ...form,
+                    pathProfileId: Number(Array.from(keys)[0]),
+                  }))
+                }
+              >
+                {availableRoutePaths.map((path) => (
                   <SelectItem key={String(path.id)} textValue={path.name}>
                     {path.name}
                   </SelectItem>
                 ))}
-            </Select>
+              </Select>
+            )}
             <Input
               label="业务名称"
               value={routeForm.name}
@@ -918,18 +1030,37 @@ export default function MultiportPage() {
             <Select
               label="协议"
               selectedKeys={[routeForm.protocolMode]}
-              onSelectionChange={(keys) =>
-                setRouteForm((form) => ({
-                  ...form,
-                  protocolMode: Array.from(
-                    keys,
-                  )[0] as IXRouteApiItem["protocolMode"],
-                }))
-              }
+              onSelectionChange={(keys) => {
+                const protocolMode = Array.from(
+                  keys,
+                )[0] as IXRouteApiItem["protocolMode"];
+
+                setRouteForm((form) => {
+                  const selectedPath = paths.find(
+                    (path) => path.id === form.pathProfileId,
+                  );
+
+                  return {
+                    ...form,
+                    protocolMode,
+                    pathProfileId:
+                      !routeScopePathId &&
+                      selectedPath &&
+                      !pathSupportsMode(selectedPath, protocolMode)
+                        ? 0
+                        : form.pathProfileId,
+                  };
+                });
+              }}
             >
-              <SelectItem key="tcp">TCP</SelectItem>
-              <SelectItem key="udp">UDP</SelectItem>
-              <SelectItem key="tcp_udp">TCP+UDP</SelectItem>
+              {protocolModes
+                .filter(
+                  (mode) =>
+                    !scopedRoutePath || pathSupportsMode(scopedRoutePath, mode),
+                )
+                .map((mode) => (
+                  <SelectItem key={mode}>{protocolLabel[mode]}</SelectItem>
+                ))}
             </Select>
           </ModalBody>
           <ModalFooter>

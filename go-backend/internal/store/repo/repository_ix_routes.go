@@ -113,6 +113,69 @@ func (r *Repository) ListIXPathProfiles() ([]model.IXPathProfile, error) {
 	return profiles, err
 }
 
+func (r *Repository) ValidateIXPathProfileForRoute(id int64, protocols []string) (*model.IXPathProfile, error) {
+	if r == nil || r.db == nil || id <= 0 {
+		return nil, errors.New("path profile is unavailable")
+	}
+	normalized, err := normalizeIXProtocols(protocols)
+	if err != nil {
+		return nil, err
+	}
+	var profile model.IXPathProfile
+	if err := r.db.First(&profile, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("path profile is unavailable")
+		}
+		return nil, err
+	}
+	if profile.Status != 1 {
+		return nil, errors.New("path profile is unavailable")
+	}
+	var nodeCount int64
+	if err := r.db.Model(&model.Node{}).Where("id IN ?", []int64{profile.EntryNodeID, profile.IXNodeID}).Count(&nodeCount).Error; err != nil {
+		return nil, err
+	}
+	if nodeCount != 2 {
+		return nil, errors.New("path Node is unavailable")
+	}
+	var entryPool model.IXPortPool
+	if err := r.db.First(&entryPool, profile.EntryPoolID).Error; err != nil {
+		return nil, errors.New("entry port pool is unavailable")
+	}
+	var ixPool model.IXPortPool
+	if err := r.db.First(&ixPool, profile.IXPoolID).Error; err != nil {
+		return nil, errors.New("IX port pool is unavailable")
+	}
+	if entryPool.Status != 1 || entryPool.Kind != IXPoolKindFull || entryPool.NodeID != profile.EntryNodeID {
+		return nil, errors.New("entry port pool is unavailable")
+	}
+	if ixPool.Status != 1 || ixPool.NodeID != profile.IXNodeID {
+		return nil, errors.New("IX port pool is unavailable")
+	}
+	if ixPool.Kind == IXPoolKindFull {
+		return &profile, nil
+	}
+	if ixPool.Kind != IXPoolKindNAT {
+		return nil, errors.New("IX port pool is unavailable")
+	}
+	query := r.db.Model(&model.IXPortResource{}).
+		Where("pool_id = ? AND excluded = ? AND verification_status = ?", ixPool.ID, false, "verified")
+	if containsIXProtocol(normalized, "tcp") {
+		query = query.Where("tcp_mapped = ?", true)
+	}
+	if containsIXProtocol(normalized, "udp") {
+		query = query.Where("udp_mapped = ?", true)
+	}
+	var resourceCount int64
+	if err := query.Count(&resourceCount).Error; err != nil {
+		return nil, err
+	}
+	if resourceCount == 0 {
+		return nil, errors.New("path does not support the requested protocol")
+	}
+	return &profile, nil
+}
+
 func (r *Repository) DeleteIXPathProfile(id int64) error {
 	if r == nil || r.db == nil || id <= 0 {
 		return errors.New("invalid path profile")
