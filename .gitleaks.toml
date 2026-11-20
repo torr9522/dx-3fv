@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Forward navigation localStorage constant names are not credentials"
+regexTarget = "match"
+regexes = ['''FORWARD_NAV_STORAGE_KEY''']

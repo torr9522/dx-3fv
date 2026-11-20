@@ -19,7 +19,7 @@ Authenticate and obtain JWT token.
   "code": 0,
   "msg": "success",
   "data": {
-    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "token": "<jwt_token>",
     "name": "Administrator",
     "role_id": 0,
     "requirePasswordChange": false
@@ -89,7 +89,7 @@ Include the token in all authenticated requests:
 
 ```bash
 curl -X POST "${FLVX_BASE_URL}/api/v1/node/list" \
-  -H "Authorization: eyJhbGciOiJIUzI1NiIs..." \
+  -H "Authorization: ${FLVX_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

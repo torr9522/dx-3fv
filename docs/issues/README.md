@@ -27,3 +27,4 @@ Latest release-preparation issues:
 - `DX3FV-0050-go-sbom-json-stream.md`
 - `DX3FV-0051-publication-knowledge-base.md`
 - `DX3FV-0052-sanitized-publication-history.md`
+- `DX3FV-0053-publication-secret-scan-baseline.md`

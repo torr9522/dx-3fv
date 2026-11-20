@@ -15,8 +15,8 @@
 `docs/issues/`、`docs/history/release-history.md` 与 `CHANGELOG.md` 中保留。RC1/RC2
 淘汰原因也保留，但原 Tag object 不复制到本历史，避免把危险 blob 带入公开仓库。
 
-公开 root Commit 的 SHA 会在本文件下一次文档提交中记录。任何比较或溯源必须使用
-上表原始 SHA 与源码内容，不能把 publication SHA 当成原始开发 Commit。
+公开 root Commit 为 `a23707e1ce390d4fa4b5059fe42080a83a7dd1f9`。任何比较或
+溯源必须使用上表原始 SHA 与源码内容，不能把 publication SHA 当成原始开发 Commit。
 
 上游自动发布、GHCR/Docker 和 npm 工作流没有在 publication snapshot 中启用，因为
 它们会在 push/Tag 时产生本轮未授权的外部发布。公开仓库只保留 read-only Native CI。

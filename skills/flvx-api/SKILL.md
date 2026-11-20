@@ -78,7 +78,7 @@ curl -X POST "${FLVX_BASE_URL}/api/v1/user/login" \
   "code": 0,
   "msg": "success",
   "data": {
-    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "token": "<jwt_token>",
     "name": "Administrator",
     "role_id": 0,
     "requirePasswordChange": false
