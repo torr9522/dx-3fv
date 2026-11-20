@@ -16,7 +16,7 @@ JWT 示例改为 `<jwt_token>`/`${FLVX_TOKEN}`。`.gitleaks.toml` 只允许精�
 
 ## 测试
 
-- `gitleaks git --redact=100 .`：0 findings。
+- `gitleaks dir --redact=100 .`：当前 Tree 0 findings。
 - Markdown 本地链接检查通过。
 - 不改变生成 bundle 的字符串值或运行行为。
 
