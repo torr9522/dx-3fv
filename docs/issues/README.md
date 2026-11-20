@@ -30,3 +30,4 @@ Latest release-preparation issues:
 - `DX3FV-0053-publication-secret-scan-baseline.md`
 - `DX3FV-0054-publication-history-example-allowlist.md`
 - `DX3FV-0055-debian-one-command-installer.md`
+- `DX3FV-0056-publication-generated-grpc-source.md`
