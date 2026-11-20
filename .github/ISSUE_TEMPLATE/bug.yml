@@ -1,0 +1,30 @@
+name: Bug report
+description: 提交可复现的 DX-3FV 缺陷
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 请勿提交 Secret、数据库、私钥、真实代理 URI 或未脱敏日志。
+  - type: input
+    id: version
+    attributes:
+      label: 版本/Commit
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 脱敏证据

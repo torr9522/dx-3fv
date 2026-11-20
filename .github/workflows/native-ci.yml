@@ -1,0 +1,50 @@
+name: Native CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go-backend/go.mod
+          cache-dependency-path: go-backend/go.sum
+      - working-directory: go-backend
+        run: go test ./...
+
+  agent:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go-gost/go.mod
+          cache-dependency-path: |
+            go-gost/go.sum
+            go-gost/x/go.sum
+      - working-directory: go-gost
+        run: go test ./...
+      - working-directory: go-gost/x
+        run: go test ./...
+
+  frontend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - run: npm install --global pnpm@10.28.1
+      - working-directory: vite-frontend
+        run: pnpm install --frozen-lockfile
+      - working-directory: vite-frontend
+        run: pnpm run build

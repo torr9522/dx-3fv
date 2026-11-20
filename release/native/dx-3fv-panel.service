@@ -1,0 +1,24 @@
+[Unit]
+Description=DX-3FV panel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dx-3fv
+Group=dx-3fv
+WorkingDirectory=/opt/dx-3fv/current
+EnvironmentFile=/etc/dx-3fv/panel.env
+ExecStart=/opt/dx-3fv/current/bin/dx-3fv-paneld
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=20s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dx-3fv /var/log/dx-3fv
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

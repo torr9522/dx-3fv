@@ -1,0 +1,20 @@
+# Replace panel.example.com with the public panel hostname before installing.
+panel.example.com {
+    encode zstd gzip
+
+    @backend path /api/* /flow/* /error /system-info
+    handle @backend {
+        reverse_proxy 127.0.0.1:17365
+    }
+
+    handle {
+        root * /opt/dx-3fv/current/frontend
+        try_files {path} /index.html
+        file_server
+    }
+
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+}

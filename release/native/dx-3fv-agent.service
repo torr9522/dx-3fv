@@ -1,0 +1,16 @@
+[Unit]
+Description=DX-3FV forwarding agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/dx-3fv-agent/current
+ExecStart=/opt/dx-3fv-agent/current/dx-3fv-agent
+Restart=always
+RestartSec=5s
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
