@@ -1,5 +1,5 @@
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router";
 import { registerSW } from "virtual:pwa-register";
 import toast from "react-hot-toast";
 

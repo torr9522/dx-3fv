@@ -4,7 +4,7 @@ import {
   useLocation,
   useNavigate,
   Navigate,
-} from "react-router-dom";
+} from "react-router";
 import { useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
 

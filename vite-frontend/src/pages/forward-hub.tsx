@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { ArrowRight, Network, Route, Signpost } from "lucide-react";
 
 import { AnimatedPage } from "@/components/animated-page";

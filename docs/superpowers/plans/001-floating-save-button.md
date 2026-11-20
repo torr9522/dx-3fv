@@ -30,7 +30,7 @@ Add import statement after existing framer-motion imports (or at top if none exi
 Current imports at line 1-2:
 ```typescript
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 ```
 
 Add new import after line 2:

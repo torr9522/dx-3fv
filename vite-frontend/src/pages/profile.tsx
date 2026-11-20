@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { DatabaseZap, Route } from "lucide-react";
 
 import { Card, CardBody } from "@/shadcn-bridge/heroui/card";

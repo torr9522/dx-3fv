@@ -5,7 +5,7 @@ import type {
 } from "@/api/types";
 
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import toast from "react-hot-toast";
 

@@ -16,12 +16,12 @@ DX3FV-0060 单独验收；若再次出现 timeout，必须保留请求时间线�
 已完成真实 TCP/UDP/Relay 业务与重启恢复回归，但未形成小时级持续流量、极限高并发
 或所有部分失败组合的完整证明。Release Candidate 不应描述为无限负载或长期无故障。
 
-## 前端依赖延期
+## 前端剩余依赖公告
 
-当前 audit 的 13 条公告位于 Tailwind/PostCSS 构建链，不进入浏览器 bundle；另外
-两条 React Router moderate 公告的修复要求迁移到 Router 7.18，涉及本项目未使用的
-SSR error hydration 和用户可控导航目的地路径。盲目主版本升级的回归风险高于已
-确认可达风险。详情见 RC 安全审计，正式发布前仍应复核新的安全公告。
+DX3FV-0059 已把 Declarative Mode 从 React Router 6.30.6 迁移到固定的
+`react-router@7.18.6`，Router 相关 audit findings 为 0。剩余公告位于其他运行时或
+构建依赖，不能为了清零数字合并无关主版本升级；发布前继续按可达性、严重性和回归
+成本逐项审计。
 
 ## 历史 Secret 候选项
 

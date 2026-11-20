@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useHref, useNavigate } from "react-router-dom";
+import { useHref, useNavigate } from "react-router";
 import { Toaster } from "react-hot-toast";
 import { I18nProvider } from "@react-aria/i18n";
 
