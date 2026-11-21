@@ -2,6 +2,9 @@ export interface NodeApiItem {
   id: number;
   name: string;
   status: number;
+  serverIp?: string;
+  serverIpV4?: string;
+  serverIpV6?: string;
   forwardMode?: "agent" | "nftables";
   sshConfig?: NodeSshConfigApiItem | null;
   inx?: number;
@@ -78,6 +81,7 @@ export interface ForwardApiItem {
   userId?: number;
   tunnelId?: number;
   entryNodeId?: number;
+  entryIp?: string;
   protocol?: "tcp" | "udp" | "tcp+udp";
   speedId?: number | null;
   ipMaxConn?: number;

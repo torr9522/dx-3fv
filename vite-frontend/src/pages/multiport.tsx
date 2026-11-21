@@ -37,6 +37,7 @@ import {
   type IXRouteDiagnosisApiItem,
 } from "@/api";
 import { AnimatedPage } from "@/components/animated-page";
+import { CopyableEntryValue } from "@/components/copyable-entry-value";
 import {
   DiagnosisResultView,
   type DiagnosisDisplayItem,
@@ -63,10 +64,13 @@ import {
   type CollapsedPathMap,
 } from "@/pages/multiport-collapse";
 import { isValidIPv4OnlyLandingHost } from "@/pages/forward/landing-target";
+import { getNodePublicEntryAddress } from "@/utils/entry-address";
 
 interface NodeOption {
   id: number;
   name: string;
+  serverIp?: string;
+  serverIpV4?: string;
 }
 
 const emptyPathForm = {
@@ -692,7 +696,22 @@ export default function MultiportPage() {
                               </div>
                             </div>
                             <div className="text-sm break-all">
-                              <div>前置入口 :{route.entryPort}</div>
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span className="inline-flex min-w-0 items-center">
+                                  IP：
+                                  <CopyableEntryValue
+                                    label="入口 IP"
+                                    value={getNodePublicEntryAddress(entryNode)}
+                                  />
+                                </span>
+                                <span className="inline-flex items-center">
+                                  端口：
+                                  <CopyableEntryValue
+                                    label="入口端口"
+                                    value={route.entryPort || null}
+                                  />
+                                </span>
+                              </div>
                               <div className="text-default-500">
                                 IX :{route.ixPublicPort} → {route.landingHost}:
                                 {route.landingPort}

@@ -743,7 +743,7 @@ func (r *Repository) GetUserPackageForwards(userID int64) ([]model.UserForwardDe
 
 	items := make([]model.UserForwardDetail, 0, len(rows))
 	for _, row := range rows {
-		inIP, inPort, err := resolveForwardIngress(r.db, row.ID, row.TunnelID)
+		inIP, inPort, _, err := resolveForwardIngress(r.db, row.ID, row.TunnelID)
 		if err != nil {
 			return nil, err
 		}
@@ -1038,7 +1038,7 @@ func (r *Repository) ListForwards() ([]map[string]interface{}, error) {
 	items := make([]map[string]interface{}, 0, len(rows))
 	for _, row := range rows {
 		proxyProtocolReceive, proxyProtocolSend := normalizeForwardProxyProtocol(row.ProxyProtocol, row.ProxyProtocolReceive, row.ProxyProtocolSend)
-		inIP, inPort, err := resolveForwardIngress(r.db, row.ID, row.TunnelID)
+		inIP, inPort, entryIP, err := resolveForwardIngress(r.db, row.ID, row.TunnelID)
 		if err != nil {
 			return nil, err
 		}
@@ -1063,6 +1063,7 @@ func (r *Repository) ListForwards() ([]map[string]interface{}, error) {
 				return nil, entryErr
 			}
 			item["entryNodeId"] = entryNodeID
+			item["entryIp"] = nullableForwardIngress(entryIP)
 		}
 		if row.SpeedID.Valid {
 			item["speedId"] = row.SpeedID.Int64
@@ -3624,30 +3625,32 @@ func quoteSQLLiteral(value string) string {
 
 // ─── Helper Functions ────────────────────────────────────────────────
 
-func resolveForwardIngress(db *gorm.DB, forwardID int64, tunnelID int64) (string, sql.NullInt64, error) {
+func resolveForwardIngress(db *gorm.DB, forwardID int64, tunnelID int64) (string, sql.NullInt64, string, error) {
 	var tunnelInIP sql.NullString
 	db.Model(&model.Tunnel{}).Select("in_ip").Where("id = ?", tunnelID).Limit(1).Scan(&tunnelInIP)
 
 	type fpRow struct {
-		Port     sql.NullInt64
-		ServerIP sql.NullString
-		InIP     sql.NullString
+		Port       sql.NullInt64
+		ServerIP   sql.NullString
+		ServerIPV4 sql.NullString
+		InIP       sql.NullString
 	}
 	var fpRows []fpRow
 	err := db.Model(&model.ForwardPort{}).
-		Select("forward_port.port, node.server_ip, forward_port.in_ip").
+		Select("forward_port.port, node.server_ip, node.server_ip_v4, forward_port.in_ip").
 		Joins("LEFT JOIN node ON node.id = forward_port.node_id").
 		Where("forward_port.forward_id = ?", forwardID).
 		Order("forward_port.id ASC").
 		Find(&fpRows).Error
 	if err != nil {
-		return "", sql.NullInt64{}, err
+		return "", sql.NullInt64{}, "", err
 	}
 
 	ports := make([]int64, 0)
 	entries := make([]string, 0)
 	seenPorts := make(map[int64]struct{})
 	seenPairs := make(map[string]struct{})
+	entryIP := ""
 
 	for _, row := range fpRows {
 		if !row.Port.Valid {
@@ -3661,11 +3664,16 @@ func resolveForwardIngress(db *gorm.DB, forwardID int64, tunnelID int64) (string
 		var ip string
 		if row.InIP.Valid && strings.TrimSpace(row.InIP.String) != "" {
 			ip = strings.TrimSpace(row.InIP.String)
+		} else if row.ServerIPV4.Valid && strings.TrimSpace(row.ServerIPV4.String) != "" {
+			ip = strings.TrimSpace(row.ServerIPV4.String)
 		} else if row.ServerIP.Valid && strings.TrimSpace(row.ServerIP.String) != "" {
 			ip = strings.TrimSpace(row.ServerIP.String)
 		}
 
 		if ip != "" {
+			if entryIP == "" {
+				entryIP = ip
+			}
 			pair := formatForwardIngressAddress(ip, row.Port.Int64)
 			if _, ok := seenPairs[pair]; !ok {
 				seenPairs[pair] = struct{}{}
@@ -3675,12 +3683,12 @@ func resolveForwardIngress(db *gorm.DB, forwardID int64, tunnelID int64) (string
 	}
 
 	if len(ports) == 0 {
-		return "", sql.NullInt64{}, nil
+		return "", sql.NullInt64{}, "", nil
 	}
 
 	inPort := sql.NullInt64{Int64: ports[0], Valid: true}
 
-	return strings.Join(entries, ","), inPort, nil
+	return strings.Join(entries, ","), inPort, entryIP, nil
 }
 
 func resolveForwardEntryNodeID(db *gorm.DB, forwardID int64) (int64, error) {
