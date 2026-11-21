@@ -34,3 +34,4 @@ Latest release-preparation issues:
 - `DX3FV-0057-multiport-create-scope.md`
 - `DX3FV-0058-udp-session-expiry-race.md`
 - `DX3FV-0059-react-router-7.md`
+- `DX3FV-0060-hour-scale-traffic.md`
