@@ -65,7 +65,7 @@ func TestDownloadReleaseAssetUsesGithubProxyWhenEnabled(t *testing.T) {
 		t.Fatalf("downloadReleaseAsset() data = %q, want compose data", string(data))
 	}
 
-	wantURL := "https://proxy.example.com/https://example.invalid/Sagit-chu/flvx/releases/download/2.1.9/docker-compose-v4.yml"
+	wantURL := "https://proxy.example.com/https://example.invalid/torr9522/dx-3fv/releases/download/2.1.9/docker-compose-v4.yml"
 	if gotURL != wantURL {
 		t.Fatalf("download URL = %q, want %q", gotURL, wantURL)
 	}
@@ -150,7 +150,7 @@ func TestSystemUpgradeRejectsConcurrentRequests(t *testing.T) {
 	h.systemUpgradeMu.Lock()
 	defer h.systemUpgradeMu.Unlock()
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/system/upgrade", strings.NewReader(`{"channel":"stable"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/system/upgrade", strings.NewReader(`{"channel":"stable","confirmed":true}`))
 	rr := httptest.NewRecorder()
 
 	h.systemUpgrade(rr, req)
@@ -182,7 +182,7 @@ func TestSystemUpgradeFailsFastBeforeMutatingFiles(t *testing.T) {
 	t.Setenv(panelBackendContainerEnv, "flux-panel-backend")
 
 	h := &Handler{}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/system/upgrade", strings.NewReader(`{"channel":"stable"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/system/upgrade", strings.NewReader(`{"channel":"stable","confirmed":true}`))
 	rr := httptest.NewRecorder()
 
 	h.systemUpgrade(rr, req)
@@ -221,6 +221,39 @@ func TestDecodeSystemUpgradeRequestRejectsTruncatedJSON(t *testing.T) {
 	}
 }
 
+func TestSystemUpgradeRequiresExplicitConfirmation(t *testing.T) {
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/system/upgrade", strings.NewReader(`{"channel":"stable"}`))
+	rr := httptest.NewRecorder()
+
+	h.systemUpgrade(rr, req)
+
+	if !strings.Contains(rr.Body.String(), "必须由管理员明确确认") {
+		t.Fatalf("expected explicit confirmation rejection, got %s", rr.Body.String())
+	}
+}
+
+func TestSystemVersionDoesNotQueryGitHub(t *testing.T) {
+	originalGet := systemUpgradeHTTPGet
+	systemUpgradeHTTPGet = func(_ *http.Client, _ string) (*http.Response, error) {
+		t.Fatal("system version must not query GitHub")
+		return nil, nil
+	}
+	t.Cleanup(func() { systemUpgradeHTTPGet = originalGet })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/system/version", nil)
+	rr := httptest.NewRecorder()
+	h.systemVersion(rr, req)
+
+	if !strings.Contains(rr.Body.String(), `"repository":"torr9522/dx-3fv"`) {
+		t.Fatalf("expected fixed DX-3FV repository, got %s", rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "自动检查更新默认关闭") {
+		t.Fatalf("expected manual-check policy, got %s", rr.Body.String())
+	}
+}
+
 func TestDecodeSystemUpgradeRequestAllowsEmptyBody(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/system/check-updates", strings.NewReader(""))
 	var payload systemUpgradeRequest
@@ -237,5 +270,63 @@ func TestSystemUpgradeVersionDataSurfacesLookupFailureReason(t *testing.T) {
 	}
 	if !strings.Contains(string(data), `"reason":"GitHub unavailable"`) {
 		t.Fatalf("expected reason field in JSON, got %s", string(data))
+	}
+}
+
+func TestSystemCheckUpdatesUsesOnlyDX3FVRepository(t *testing.T) {
+	originalGet := systemUpgradeHTTPGet
+	var requestedURL string
+	systemUpgradeHTTPGet = func(_ *http.Client, url string) (*http.Response, error) {
+		requestedURL = url
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body: io.NopCloser(strings.NewReader(
+				`[{"tag_name":"v1.0.0","name":"stable","draft":false,"prerelease":false}]`,
+			)),
+		}, nil
+	}
+	t.Cleanup(func() { systemUpgradeHTTPGet = originalGet })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/system/check-updates", strings.NewReader(`{"channel":"stable"}`))
+	rr := httptest.NewRecorder()
+	h.systemCheckUpdates(rr, req)
+
+	if requestedURL != "https://api.github.com/repos/torr9522/dx-3fv/releases?per_page=50" {
+		t.Fatalf("GitHub URL = %q", requestedURL)
+	}
+	if !strings.Contains(rr.Body.String(), `"latestVersion":"v1.0.0"`) {
+		t.Fatalf("expected v-prefixed stable release, got %s", rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"repository":"torr9522/dx-3fv"`) {
+		t.Fatalf("expected fixed repository, got %s", rr.Body.String())
+	}
+}
+
+func TestSystemCheckUpdatesSurfacesGitHubRateLimit(t *testing.T) {
+	originalGet := systemUpgradeHTTPGet
+	systemUpgradeHTTPGet = func(_ *http.Client, _ string) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusForbidden,
+			Body:       io.NopCloser(strings.NewReader(`{"message":"rate limit"}`)),
+		}, nil
+	}
+	t.Cleanup(func() { systemUpgradeHTTPGet = originalGet })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/system/check-updates", strings.NewReader(`{"channel":"stable"}`))
+	rr := httptest.NewRecorder()
+	h.systemCheckUpdates(rr, req)
+
+	if !strings.Contains(rr.Body.String(), "GitHub API返回 403") {
+		t.Fatalf("expected rate-limit error, got %s", rr.Body.String())
+	}
+}
+
+func TestDefaultUpdateDownloadURLUsesDX3FVDirectly(t *testing.T) {
+	h := &Handler{}
+	want := "https://github.com/torr9522/dx-3fv/releases/download/v1.0.1/dx-3fv-v1.0.1.tar.gz"
+	if got := h.buildGithubDownloadURL("v1.0.1", "dx-3fv-v1.0.1.tar.gz"); got != want {
+		t.Fatalf("download URL = %q, want %q", got, want)
 	}
 }

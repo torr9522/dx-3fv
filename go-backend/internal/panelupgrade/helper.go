@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"time"
 )
@@ -47,62 +46,7 @@ func config(ctx context.Context, p Plan, dir string) (composeConfig, error) {
 	return c, e
 }
 func validateConfig(old, next composeConfig, p Plan) error {
-	// Compare complete normalized services, not a projection that can silently drop
-	// host bindings, commands, security options, networks or dependency changes.
-	if old.FullServices == nil || next.FullServices == nil {
-		return errors.New("missing full Compose configuration")
-	}
-	raw, _ := json.Marshal(old.FullServices)
-	var expected map[string]map[string]any
-	if json.Unmarshal(raw, &expected) != nil {
-		return errors.New("invalid configuration")
-	}
-	for _, service := range []string{"backend", "frontend"} {
-		if expected[service] == nil || next.FullServices[service] == nil {
-			return errors.New("missing service")
-		}
-		expected[service]["image"] = next.FullServices[service]["image"]
-	}
-	if env, ok := expected["backend"]["environment"].(map[string]any); ok {
-		env["FLUX_VERSION"] = p.Job.TargetVersion
-	} else {
-		return errors.New("missing backend environment")
-	}
-	if !reflect.DeepEqual(expected, next.FullServices) {
-		return errors.New("unsupported service configuration change; manual upgrade required")
-	}
-
-	for service, image := range map[string]string{"backend": "ghcr.io/sagit-chu/flux-panel-backend:", "frontend": "ghcr.io/sagit-chu/vite-frontend:"} {
-		a, ok := old.Services[service]
-		b, present := next.Services[service]
-		if !ok || !present || b.Image != image+p.Job.TargetVersion || a.ContainerName != b.ContainerName || !reflect.DeepEqual(a.Volumes, b.Volumes) {
-			return errors.New("service image, container identity or persistent mounts do not match the supported deployment")
-		}
-	}
-	if next.Services["backend"].ContainerName != p.Backend || next.Services["backend"].Environment["FLUX_VERSION"] != p.Job.TargetVersion {
-		return errors.New("backend identity/version mismatch")
-	}
-
-	for service := range next.Services {
-		if service != "backend" && service != "frontend" && service != "postgres" {
-			return errors.New("unsupported service")
-		}
-	}
-	for key, value := range old.Services["backend"].Environment {
-		if key != "FLUX_VERSION" && next.Services["backend"].Environment[key] != value {
-			return errors.New("backend environment changed; manual upgrade required")
-		}
-	}
-	for key, value := range next.Services["backend"].Environment {
-		if key != "FLUX_VERSION" && old.Services["backend"].Environment[key] != value {
-			return errors.New("backend environment changed; manual upgrade required")
-		}
-	}
-	// Database configuration and shared resource identities are not upgrade targets.
-	if !reflect.DeepEqual(old.Services["postgres"], next.Services["postgres"]) || !reflect.DeepEqual(old.Volumes, next.Volumes) || !reflect.DeepEqual(old.Networks, next.Networks) {
-		return errors.New("database or shared resource configuration changed; manual upgrade required")
-	}
-	return nil
+	return errors.New("DX-3FV disables the inherited Docker upgrade helper; use the verified native release scripts")
 }
 
 // validateLive proves the normalized source configuration still describes the running

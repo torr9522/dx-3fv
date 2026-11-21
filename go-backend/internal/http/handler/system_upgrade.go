@@ -62,6 +62,7 @@ type systemUpgradeVersionData struct {
 	LatestVersion  string                      `json:"latestVersion"`
 	HasUpdate      bool                        `json:"hasUpdate"`
 	Channel        string                      `json:"channel"`
+	Repository     string                      `json:"repository"`
 	Reason         string                      `json:"reason,omitempty"`
 	Capability     systemUpgradeCapabilityData `json:"capability"`
 }
@@ -71,6 +72,7 @@ type systemUpgradeCheckData struct {
 	LatestVersion  string                      `json:"latestVersion"`
 	HasUpdate      bool                        `json:"hasUpdate"`
 	Channel        string                      `json:"channel"`
+	Repository     string                      `json:"repository"`
 	Capability     systemUpgradeCapabilityData `json:"capability"`
 	Releases       []systemUpgradeReleaseData  `json:"releases"`
 }
@@ -86,8 +88,9 @@ type systemUpgradeRunData struct {
 }
 
 type systemUpgradeRequest struct {
-	Version string `json:"version"`
-	Channel string `json:"channel"`
+	Version   string `json:"version"`
+	Channel   string `json:"channel"`
+	Confirmed bool   `json:"confirmed"`
 }
 
 func newSystemUpgradeExecutor() *systemUpgradeExecutor {
@@ -128,6 +131,18 @@ func (e *systemUpgradeExecutor) composePath() string {
 func (e *systemUpgradeExecutor) envPath() string { return filepath.Join(e.deployDir, ".env") }
 
 func (e *systemUpgradeExecutor) capability(ctx context.Context) systemUpgradeCapabilityData {
+	// DX-3FV is released and operated as a verified native package. The
+	// inherited Docker helper references upstream container images and must
+	// never be used as a DX-3FV update path.
+	return systemUpgradeCapabilityData{
+		Capable:          false,
+		Reasons:          []string{"DX-3FV 原生部署不支持 GUI 自动升级，请使用正式 Release 中的 upgrade-native.sh"},
+		DeployDir:        e.deployDir,
+		BackendContainer: e.backendContainer,
+	}
+}
+
+func (e *systemUpgradeExecutor) legacyDockerCapability(ctx context.Context) systemUpgradeCapabilityData {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	reasons := make([]string, 0)
@@ -320,6 +335,7 @@ func systemUpgradeVersionResponse(current, channel, latest string, lookupErr err
 		LatestVersion:  latest,
 		HasUpdate:      latest != "" && latest != current,
 		Channel:        channel,
+		Repository:     githubRepo,
 		Capability:     capability,
 	}
 	if lookupErr != nil {
@@ -340,8 +356,9 @@ func (h *Handler) systemVersion(w http.ResponseWriter, r *http.Request) {
 	current := currentPanelVersion()
 	exec := newSystemUpgradeExecutor()
 	capability := exec.capability(r.Context())
-	latest, err := h.resolveSystemUpgradeLatestReleaseByChannel(channel)
-	response.WriteJSON(w, response.OK(systemUpgradeVersionResponse(current, channel, latest, err, capability)))
+	data := systemUpgradeVersionResponse(current, channel, "", nil, capability)
+	data.Reason = "自动检查更新默认关闭，请使用手动检查更新"
+	response.WriteJSON(w, response.OK(data))
 }
 
 func (h *Handler) systemCheckUpdates(w http.ResponseWriter, r *http.Request) {
@@ -375,6 +392,7 @@ func (h *Handler) systemCheckUpdates(w http.ResponseWriter, r *http.Request) {
 		LatestVersion:  latest,
 		HasUpdate:      latest != "" && latest != current,
 		Channel:        channel,
+		Repository:     githubRepo,
 		Capability:     capability,
 		Releases:       releases,
 	}))
@@ -394,6 +412,10 @@ func (h *Handler) systemUpgrade(w http.ResponseWriter, r *http.Request) {
 	var req systemUpgradeRequest
 	if err := decodeSystemUpgradeRequest(r, &req); err != nil {
 		response.WriteJSON(w, response.ErrDefault("请求参数错误"))
+		return
+	}
+	if !req.Confirmed {
+		response.WriteJSON(w, response.ErrDefault("升级前必须由管理员明确确认"))
 		return
 	}
 	channel := normalizeReleaseChannel(req.Channel)

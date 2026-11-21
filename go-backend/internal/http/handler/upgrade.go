@@ -21,7 +21,7 @@ type failedForward struct {
 }
 
 const (
-	githubRepo     = "Sagit-chu/flvx"
+	githubRepo     = "torr9522/dx-3fv"
 	githubAPIBase  = "https://api.github.com"
 	githubHTMLBase = "https://github.com"
 	upgradeTimeout = 5 * time.Minute
@@ -30,7 +30,7 @@ const (
 	releaseChannelStable = "stable"
 	releaseChannelDev    = "dev"
 
-	defaultGithubProxyEnabled = true
+	defaultGithubProxyEnabled = false
 	defaultGithubProxyURL     = "https://gcode.hostcentral.cc"
 )
 
@@ -66,6 +66,7 @@ func releaseChannelFromTag(tag string) string {
 	if testKeywordPattern.MatchString(normalized) {
 		return releaseChannelDev
 	}
+	normalized = strings.TrimPrefix(normalized, "v")
 	if stableVersionPattern.MatchString(normalized) {
 		return releaseChannelStable
 	}

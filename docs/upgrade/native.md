@@ -1,5 +1,9 @@
 # 原生升级
 
+DX-3FV 默认不自动检查、下载或安装更新。设置页的“检查更新”是管理员主动操作，唯一
+查询源为 `https://github.com/torr9522/dx-3fv`。原生部署不使用继承的 Docker GUI
+升级 helper；检查到新版本后仍须下载完整正式包并执行下述校验流程。
+
 ## 升级前
 
 1. 校验发布包与源码包 SHA256、`MANIFEST`、Annotated Tag 和 Release Notes。

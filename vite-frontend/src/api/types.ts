@@ -550,6 +550,7 @@ export interface SystemUpgradeVersionApiData {
   latestVersion: string;
   hasUpdate: boolean;
   channel: "stable" | "dev";
+  repository: string;
   reason?: string;
   capability: SystemUpgradeCapabilityApiData;
 }

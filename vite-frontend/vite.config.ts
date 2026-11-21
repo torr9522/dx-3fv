@@ -9,7 +9,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "prompt",
-      injectRegister: "auto",
+      injectRegister: null,
       includeAssets: ["favicon.ico", "apple-touch-icon.png"],
       manifest: {
         name: "FLVX",

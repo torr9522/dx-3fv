@@ -42,3 +42,4 @@ Latest release-preparation issues:
 - `DX3FV-0065-stable-v1.0.0-release.md`
 - `DX3FV-0066-publish-v1.0.0-installer.md`
 - `DX3FV-0067-entry-address-copy.md`
+- `DX3FV-0068-update-policy-and-source.md`

@@ -331,7 +331,7 @@ export const runSystemUpgrade = (
 ) =>
   Network.post<SystemUpgradeRunApiData>(
     "/system/upgrade",
-    { version: version || "", channel },
+    { version: version || "", channel, confirmed: true },
     { timeout: 60 * 1000 },
   );
 

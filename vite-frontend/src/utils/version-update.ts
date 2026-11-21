@@ -2,6 +2,11 @@ export type UpdateReleaseChannel = "stable" | "dev";
 
 export const UPDATE_CHANNEL_STORAGE_KEY = "update-release-channel";
 export const UPDATE_CHANNEL_CHANGED_EVENT = "updateReleaseChannelChanged";
+export const AUTOMATIC_UPDATE_CHECK_STORAGE_KEY =
+  "dx3fv-automatic-update-check";
+export const AUTOMATIC_UPDATE_CHECK_CHANGED_EVENT =
+  "dx3fvAutomaticUpdateCheckChanged";
+export const DX3FV_GITHUB_REPOSITORY = "torr9522/dx-3fv";
 
 const CHANNEL_STABLE: UpdateReleaseChannel = "stable";
 const CHANNEL_DEV: UpdateReleaseChannel = "dev";
@@ -52,6 +57,22 @@ export const setUpdateReleaseChannel = (
 
   localStorage.setItem(UPDATE_CHANNEL_STORAGE_KEY, normalizeChannel(channel));
   window.dispatchEvent(new Event(UPDATE_CHANNEL_CHANGED_EVENT));
+};
+
+export const getAutomaticUpdateCheckEnabled = (): boolean => {
+  if (typeof window === "undefined") return false;
+
+  return localStorage.getItem(AUTOMATIC_UPDATE_CHECK_STORAGE_KEY) === "true";
+};
+
+export const setAutomaticUpdateCheckEnabled = (enabled: boolean): void => {
+  if (typeof window === "undefined") return;
+
+  localStorage.setItem(
+    AUTOMATIC_UPDATE_CHECK_STORAGE_KEY,
+    enabled ? "true" : "false",
+  );
+  window.dispatchEvent(new Event(AUTOMATIC_UPDATE_CHECK_CHANGED_EVENT));
 };
 
 const normalizeTag = (tag: string): string => {
@@ -138,27 +159,8 @@ export const compareVersions = (left: string, right: string): number => {
   return 0;
 };
 
-const repoPathFromUrl = (repoUrl: string): string | null => {
-  try {
-    const parsed = new URL(repoUrl);
-    const segments = parsed.pathname
-      .replace(/\.git$/i, "")
-      .split("/")
-      .filter(Boolean);
-
-    if (segments.length < 2) {
-      return null;
-    }
-
-    return `${segments[0]}/${segments[1]}`;
-  } catch {
-    return null;
-  }
-};
-
 export const getLatestVersionByChannel = async (
   channel: UpdateReleaseChannel,
-  repoUrl: string,
 ): Promise<string | null> => {
   const normalizedChannel = normalizeChannel(channel);
   const now = Date.now();
@@ -168,14 +170,8 @@ export const getLatestVersionByChannel = async (
     return cached.value;
   }
 
-  const repoPath = repoPathFromUrl(repoUrl);
-
-  if (!repoPath) {
-    return null;
-  }
-
   const response = await fetch(
-    `https://api.github.com/repos/${repoPath}/releases?per_page=50`,
+    `https://api.github.com/repos/${DX3FV_GITHUB_REPOSITORY}/releases?per_page=50`,
     {
       headers: {
         Accept: "application/vnd.github+json",

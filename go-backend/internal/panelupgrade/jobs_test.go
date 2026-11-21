@@ -89,92 +89,51 @@ func configs(p Plan) (string, string) {
 		next.Services[k] = v
 	}
 	v := next.Services["backend"]
-	v.Image = "ghcr.io/sagit-chu/flux-panel-backend:" + p.Job.TargetVersion
+	v.Image = "registry.invalid/dx-3fv/panel-backend:" + p.Job.TargetVersion
 	v.Environment = map[string]string{"FLUX_VERSION": p.Job.TargetVersion}
 	next.Services["backend"] = v
 	v = next.Services["frontend"]
-	v.Image = "ghcr.io/sagit-chu/vite-frontend:" + p.Job.TargetVersion
+	v.Image = "registry.invalid/dx-3fv/frontend:" + p.Job.TargetVersion
 	next.Services["frontend"] = v
 	b, _ := json.Marshal(next)
 	return string(a), string(b)
 }
-func TestHelperFailureBoundaries(t *testing.T) {
-	for _, stage := range []string{"config", "pull", "apply", "up", "health", "success"} {
-		t.Run(stage, func(t *testing.T) {
-			m, p := fixture(t)
-			old, next := configs(p)
-			dir := m.jobDir(p.Job.ID)
-			if stage == "apply" {
-				os.Remove(filepath.Join(dir, ".env"))
-				os.Mkdir(filepath.Join(dir, ".env"), 0700)
-			}
-			if stage == "health" {
-				before := verificationTimeout
-				verificationTimeout = 0
-				t.Cleanup(func() { verificationTimeout = before })
-			}
-			script := `case "$*" in
+func TestHelperRejectsInheritedDockerUpgradeWithoutMutation(t *testing.T) {
+	m, p := fixture(t)
+	old, next := configs(p)
+	dir := m.jobDir(p.Job.ID)
+	fakeDocker(t, `case "$*" in
  *"config --format json"*)
- case "$*" in *"` + p.Job.ID + `"*) echo '` + next + `';; *) echo '` + old + `';; esac
+ case "$*" in *"`+p.Job.ID+`"*) echo '`+next+`';; *) echo '`+old+`';; esac
  ;;
- *"pull backend frontend"*) `
-			if stage == "pull" {
-				script += "echo SECRET >&2; exit 1"
-			} else {
-				script += "exit 0"
-			}
-			script += `;;
- "image inspect"*) echo sha256:target;;
- *"up -d"*) `
-			if stage == "up" {
-				script += "exit 1"
-			} else {
-				script += "touch \"" + filepath.Join(dir, "recreated") + "\"; exit 0"
-			}
-			script += `;;
- "inspect flux-panel-backend") if [ -f "` + filepath.Join(dir, "recreated") + `" ]; then IMG=sha256:target; else IMG=sha256:old; fi; echo '[{"Image":"'"$IMG"'","State":{"Running":true,"Health":{"Status":"healthy"}},"Config":{"Labels":{"com.docker.compose.project":"original-project","com.docker.compose.service":"backend"}}}]';;
- "inspect vite-frontend") echo '[{"Image":"sha256:target","State":{"Running":true},"Config":{"Labels":{"com.docker.compose.project":"original-project","com.docker.compose.service":"frontend"}}}]';;
- "exec vite-frontend wget"*) exit 0;;
- *) exit 1;; esac
-`
-			if stage == "config" {
-				script = "echo SECRET >&2;exit 1\n"
-			}
-			fakeDocker(t, script)
-			e := RunHelper(filepath.Join(dir, "plan.json"))
-			j, _ := m.read(p.Job.ID)
-			want := "failed"
-			if stage == "up" || stage == "health" {
-				want = "recovery_required"
-			}
-			if stage == "success" {
-				want = "succeeded"
-				if e != nil {
-					t.Fatal(e)
-				}
-			}
-			if j.Stage != want {
-				t.Fatalf("stage=%s error=%v", j.Stage, e)
-			}
-			for _, n := range []string{".env", "docker-compose.yml"} {
-				b, _ := os.ReadFile(filepath.Join(m.Dir, n))
-				expected := "original"
-				if stage == "up" || stage == "success" || stage == "health" {
-					expected = "target"
-				}
-				if string(b) != expected {
-					t.Fatalf("%s mutated unexpectedly", n)
-				}
-				b, _ = os.ReadFile(filepath.Join(dir, n+".original"))
-				if string(b) != "original" {
-					t.Fatal("backup overwritten")
-				}
-			}
-			b, _ := os.ReadFile(filepath.Join(dir, "events.log"))
-			if strings.Contains(string(b), "SECRET") {
-				t.Fatal("secret leaked")
-			}
-		})
+ *) echo SECRET >&2; exit 1;;
+esac
+`)
+
+	err := RunHelper(filepath.Join(dir, "plan.json"))
+	if err == nil {
+		t.Fatal("inherited Docker upgrade helper was accepted")
+	}
+	job, readErr := m.read(p.Job.ID)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if job.Stage != "failed" || job.Active {
+		t.Fatalf("unexpected job state: %+v", job)
+	}
+	for _, name := range []string{".env", "docker-compose.yml"} {
+		live, readErr := os.ReadFile(filepath.Join(m.Dir, name))
+		if readErr != nil || string(live) != "original" {
+			t.Fatalf("%s mutated unexpectedly: %q (%v)", name, live, readErr)
+		}
+		backup, readErr := os.ReadFile(filepath.Join(dir, name+".original"))
+		if readErr != nil || string(backup) != "original" {
+			t.Fatalf("%s backup changed: %q (%v)", name, backup, readErr)
+		}
+	}
+	events, _ := os.ReadFile(filepath.Join(dir, "events.log"))
+	if strings.Contains(string(events), "SECRET") {
+		t.Fatal("secret leaked")
 	}
 }
 func TestComposeUsesOriginalHostPathAndProject(t *testing.T) {

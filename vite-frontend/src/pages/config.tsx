@@ -53,7 +53,9 @@ import {
 } from "@/config/tunnel-quality";
 import {
   type UpdateReleaseChannel,
+  getAutomaticUpdateCheckEnabled,
   getUpdateReleaseChannel,
+  setAutomaticUpdateCheckEnabled,
   setUpdateReleaseChannel,
 } from "@/utils/version-update";
 import {
@@ -341,6 +343,9 @@ export default function ConfigPage() {
   const [updateChannel, setUpdateChannel] = useState<UpdateReleaseChannel>(
     getUpdateReleaseChannel(),
   );
+  const [automaticUpdateCheck, setAutomaticUpdateCheck] = useState(
+    getAutomaticUpdateCheckEnabled(),
+  );
   const [systemUpgradeInfo, setSystemUpgradeInfo] =
     useState<SystemUpgradeVersionApiData | null>(null);
   const [systemUpgradeChecking, setSystemUpgradeChecking] = useState(false);
@@ -556,6 +561,12 @@ export default function ConfigPage() {
     toast.success(
       `更新通道已切换为${channel === "stable" ? "稳定版" : "开发版"}`,
     );
+  };
+
+  const handleAutomaticUpdateCheckChange = (enabled: boolean) => {
+    setAutomaticUpdateCheck(enabled);
+    setAutomaticUpdateCheckEnabled(enabled);
+    toast.success(enabled ? "已开启自动检查更新" : "已关闭自动检查更新");
   };
 
   const handleCheckSystemUpgrade = async () => {
@@ -1638,6 +1649,21 @@ export default function ConfigPage() {
                 开发版
               </SelectItem>
             </Select>
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-divider px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  自动检查更新
+                </p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  默认关闭。开启后只检查并提示，不会自动下载或安装。
+                </p>
+              </div>
+              <Switch
+                aria-label="自动检查更新"
+                isSelected={automaticUpdateCheck}
+                onValueChange={handleAutomaticUpdateCheckChange}
+              />
+            </div>
           </div>
 
           <Divider className="my-2" />
@@ -1664,7 +1690,8 @@ export default function ConfigPage() {
                 面板自升级
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                检查当前版本、可用发布并在容器环境中触发面板升级。
+                手动检查 DX-3FV 正式发布。原生部署升级使用 Release
+                内的校验脚本，不会从页面自动下载或安装。
               </p>
             </div>
 
@@ -1768,7 +1795,7 @@ export default function ConfigPage() {
                   <div>
                     <p className="text-xs text-default-500">最新版本</p>
                     <p className="mt-1 font-medium">
-                      {systemUpgradeInfo?.latestVersion || "未获取到可用版本"}
+                      {systemUpgradeInfo?.latestVersion || "尚未手动检查"}
                     </p>
                   </div>
                   <div>
@@ -1791,6 +1818,13 @@ export default function ConfigPage() {
                         : "当前不可升级"}
                     </p>
                   </div>
+                </div>
+
+                <div>
+                  <p className="text-xs text-default-500">唯一更新源</p>
+                  <p className="mt-1 break-all font-medium">
+                    {systemUpgradeInfo?.repository || "torr9522/dx-3fv"}
+                  </p>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
@@ -1893,7 +1927,7 @@ export default function ConfigPage() {
                 isLoading={systemUpgradeExecuting}
                 onPress={handleOpenSystemUpgradeModal}
               >
-                立即升级
+                确认升级
               </Button>
             </div>
           </div>

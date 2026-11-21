@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 
 import { siteConfig } from "@/config/site";
 import {
+  AUTOMATIC_UPDATE_CHECK_CHANGED_EVENT,
   UPDATE_CHANNEL_CHANGED_EVENT,
   type UpdateReleaseChannel,
+  getAutomaticUpdateCheckEnabled,
   getLatestVersionByChannel,
   getUpdateReleaseChannel,
   hasVersionUpdate,
 } from "@/utils/version-update";
-
-const FALLBACK_GITHUB_REPO = "https://github.com/Sagit-chu/flux-panel";
 
 interface VersionFooterProps {
   version: string;
@@ -29,6 +29,9 @@ export function VersionFooter({
   const [channel, setChannel] = useState<UpdateReleaseChannel>(
     getUpdateReleaseChannel(),
   );
+  const [automaticCheckEnabled, setAutomaticCheckEnabled] = useState(
+    getAutomaticUpdateCheckEnabled(),
+  );
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [latestUpdateVersion, setLatestUpdateVersion] = useState<string | null>(
     null,
@@ -37,14 +40,23 @@ export function VersionFooter({
   useEffect(() => {
     const handleChannelChange = () => {
       setChannel(getUpdateReleaseChannel());
+      setAutomaticCheckEnabled(getAutomaticUpdateCheckEnabled());
     };
 
     window.addEventListener(UPDATE_CHANNEL_CHANGED_EVENT, handleChannelChange);
+    window.addEventListener(
+      AUTOMATIC_UPDATE_CHECK_CHANGED_EVENT,
+      handleChannelChange,
+    );
     window.addEventListener("storage", handleChannelChange);
 
     return () => {
       window.removeEventListener(
         UPDATE_CHANNEL_CHANGED_EVENT,
+        handleChannelChange,
+      );
+      window.removeEventListener(
+        AUTOMATIC_UPDATE_CHECK_CHANGED_EVENT,
         handleChannelChange,
       );
       window.removeEventListener("storage", handleChannelChange);
@@ -54,11 +66,17 @@ export function VersionFooter({
   useEffect(() => {
     let active = true;
 
+    if (!automaticCheckEnabled) {
+      setUpdateAvailable(false);
+      setLatestUpdateVersion(null);
+
+      return () => {
+        active = false;
+      };
+    }
+
     const checkUpdate = async () => {
-      const latestVersion = await getLatestVersionByChannel(
-        channel,
-        siteConfig.github_repo || FALLBACK_GITHUB_REPO,
-      );
+      const latestVersion = await getLatestVersionByChannel(channel);
 
       if (!active) {
         return;
@@ -82,7 +100,7 @@ export function VersionFooter({
     return () => {
       active = false;
     };
-  }, [channel, version]);
+  }, [automaticCheckEnabled, channel, version]);
 
   return (
     <div className={containerClassName}>
