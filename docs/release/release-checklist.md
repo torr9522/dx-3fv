@@ -9,4 +9,4 @@
 - 升级/回滚恢复数据库、Agent、Listener、TCP/UDP/Relay 和流量。
 - 1440px/390px 浏览器无 5xx、JS error 或水平溢出。
 - Known Issues 与淘汰 RC 如实披露。
-- 只向 `torr9522/dx-3fv` push；不 force push、不覆盖 Tag、不创建稳定版。
+- 只向 `torr9522/dx-3fv` push；不 force push、不覆盖 Tag；稳定版仅在用户明确授权后创建。

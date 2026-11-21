@@ -5,8 +5,8 @@ FLVX 的 Forward、Tunnel、Node、用户、监控、限速、共享与 Agent/GO
 增加面向受限 NAT/IX 资源的多端口业务、持久化端口租约、统一诊断和累计流量。
 
 本项目的正式部署方式是 Linux 原生二进制、systemd 与 Caddy，不使用 Docker 或
-Podman。Release Candidate 以稳定、可升级、可回滚为目标，不代表所有长期稳定性
-风险已经关闭。
+Podman。稳定版以可安装、可升级、可回滚和可诊断为目标；公网线路、Provider NAT、
+Landing 与 UDP Session 等外部条件仍会影响端到端业务体验。
 
 ## 核心能力
 
@@ -46,8 +46,8 @@ Debian 12 amd64 全新服务器可使用[一键安装器](docs/installation/one-
 bash <(curl -fsSL https://raw.githubusercontent.com/torr9522/dx-3fv/main/scripts/install.sh)
 ```
 
-当前 Release Candidate 默认使用固定 `v1.0.0-rc.4` 原生包和 SHA256；正式稳定版发布
-后默认值才会切换到固定 `v1.0.0` Tag。
+正式发布后，一键安装器默认使用固定 `v1.0.0` 原生包和 SHA256，不跟随 `main` 上的
+未发布版本。也可显式传入 `--version v1.0.0`。
 
 手工原生安装：
 
@@ -98,6 +98,9 @@ Agent 配置包含 Panel 地址和节点 Secret，必须以 `0600` 保存，且�
 - 不要把 Panel API 或 Agent WebSocket 暴露给不可信网络而不使用 HTTPS/TLS。
 - IX/NAT 管理地址、Provider 映射和业务 Landing 是不同安全边界。
 - UDP 成功必须有实际 payload 响应证据；ICMP 或 TCP Connect 不能证明 UDP 成功。
+- DX-3FV 不承诺公网 UDP 零丢包。前置服务器、IX、Provider NAT、Landing、公网路由、
+  UDP Session、外部代理服务以及 Panel/Agent/Runtime 状态都可能影响完整链路；单次
+  timeout 既不能单独证明产品缺陷，也不能证明问题必然来自外部网络。
 - 当前已知风险见[已知问题](docs/release/known-issues.md)。
 - 配置、数据库、私钥、节点 Secret 和真实代理 URI 不属于发布物。
 
