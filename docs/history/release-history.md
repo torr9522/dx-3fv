@@ -22,3 +22,4 @@ Phase 5 独立交付：
 - `v0.1.64-fix-full-pool-allocation-scan`：100 并发验收与 full Pool 自动分配阻塞修复。
 - `v0.1.65-verify-fault-recovery-matrix`：完整可恢复故障注入矩阵及最终业务回归证据。
 - `v1.0.0`：首个稳定版；保留公网 UDP 网络依赖限制，不承诺零丢包或无限容量。
+- `v0.1.67-publish-v1.0.0-installer`：发布正式原生包并将安装器固定到 `v1.0.0`。
