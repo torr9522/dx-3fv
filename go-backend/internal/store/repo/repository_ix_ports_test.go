@@ -62,6 +62,30 @@ func TestIXFullPoolExcludesSSHAndAllocatesTCPUDPAtomically(t *testing.T) {
 	}
 }
 
+func TestIXFullPoolAutoAllocationMaterializesOnlySelectedResources(t *testing.T) {
+	r := openIXPortTestRepo(t)
+	pool := createIXTestPool(t, r, 12, "gz2-auto", IXPoolKindFull, 1, 65535)
+
+	first, err := r.AllocateIXPorts(IXPortAllocationRequest{PoolID: pool.ID, Protocols: []string{"tcp"}, OwnerType: "route", OwnerID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := r.AllocateIXPorts(IXPortAllocationRequest{PoolID: pool.ID, Protocols: []string{"tcp"}, OwnerType: "route", OwnerID: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Resource.InternalPort == second.Resource.InternalPort {
+		t.Fatalf("auto allocation reused port %d", first.Resource.InternalPort)
+	}
+	var resources int64
+	if err := r.DB().Model(&model.IXPortResource{}).Where("pool_id = ?", pool.ID).Count(&resources).Error; err != nil {
+		t.Fatal(err)
+	}
+	if resources != 2 {
+		t.Fatalf("auto allocation materialized %d resources, want 2", resources)
+	}
+}
+
 func TestIXFullPoolKeepsTCPAndUDPOwnershipIndependent(t *testing.T) {
 	r := openIXPortTestRepo(t)
 	pool := createIXTestPool(t, r, 11, "gz2", IXPoolKindFull, 44000, 44010)

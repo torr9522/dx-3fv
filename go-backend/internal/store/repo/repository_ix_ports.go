@@ -348,7 +348,6 @@ func ixPortCandidates(tx *gorm.DB, pool *model.IXPortPool, requested int, protoc
 		}
 	}
 
-	resources := make([]model.IXPortResource, 0, len(ports))
 	for _, port := range ports {
 		if port == 22 {
 			continue
@@ -380,9 +379,12 @@ func ixPortCandidates(tx *gorm.DB, pool *model.IXPortPool, requested int, protoc
 		if occupied {
 			continue
 		}
-		resources = append(resources, resource)
+		// AllocateIXPorts holds the pool row lock for this transaction and only
+		// consumes one candidate. Returning immediately avoids materializing and
+		// querying the entire 1-65535 full-pool range for every allocation.
+		return []model.IXPortResource{resource}, nil
 	}
-	return resources, nil
+	return nil, nil
 }
 
 func ixPortAlreadyOwned(tx *gorm.DB, nodeID int64, port int, protocols []string) (bool, error) {

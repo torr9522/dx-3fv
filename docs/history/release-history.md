@@ -10,3 +10,11 @@
 
 正式 `v1.0.0` 尚未创建。Phase 4 的 publication Tag 只表示公开历史/安装器候选，不得
 冒充最终稳定版。
+
+Phase 5 独立交付：
+
+- `v0.1.60-fix-multiport-create-scope`：新增业务入口与 PathProfile 作用域。
+- `v0.1.61-fix-udp-session-expiry`：修复 UDP session 到期/入队竞态。
+- `v0.1.62-migrate-react-router-7`：Declarative Mode 迁移到 React Router 7.18.6。
+- `v0.1.63-verify-hour-scale-traffic`：61 分钟真实持续流量证据。
+- `v0.1.64-fix-full-pool-allocation-scan`：100 并发验收与 full Pool 自动分配阻塞修复。

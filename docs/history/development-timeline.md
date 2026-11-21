@@ -12,6 +12,7 @@
 - Phase 4：只建立 sanitized 公开历史、独立知识库和 Debian 12 一键安装验收。
 - Phase 5：修正多端口新增业务 PathProfile 作用域，关闭 UDP session expiry 入队竞态，
   迁移 React Router 7，并以 10697 个真实 payload 完成 61 分钟持续流量验收；真实单包
-  丢失与外部 TLS 失败保留为发布证据，不宣称零丢包 SLA。
+  丢失与外部 TLS 失败保留为发布证据；随后完成最高 100 并发的七场景压力验证，修复
+  full Pool 自动分配穷举 65K 候选导致的 Panel 全局阻塞，不宣称零丢包或无限容量 SLA。
 
 逐项根因和 Tag 见 `docs/issues/` 与 `docs/history/release-history.md`。
