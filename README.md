@@ -46,7 +46,7 @@ Debian 12 amd64 全新服务器可使用[一键安装器](docs/installation/one-
 bash <(curl -fsSL https://raw.githubusercontent.com/torr9522/dx-3fv/main/scripts/install.sh)
 ```
 
-当前 Release Candidate 默认使用固定 `v1.0.0-rc.3` 原生包和 SHA256；正式稳定版发布
+当前 Release Candidate 默认使用固定 `v1.0.0-rc.4` 原生包和 SHA256；正式稳定版发布
 后默认值才会切换到固定 `v1.0.0` Tag。
 
 手工原生安装：

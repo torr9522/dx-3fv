@@ -19,7 +19,7 @@ DX3FV_DOMAIN=panel.example.com \
 DX3FV_ACME_MODE=staging \
 DX3FV_ADMIN_MODE=random \
 bash <(curl -fsSL https://raw.githubusercontent.com/torr9522/dx-3fv/main/scripts/install.sh) \
-  --non-interactive --version v1.0.0-rc.3
+  --non-interactive --version v1.0.0-rc.4
 ```
 
 脚本检测到已有数据库、systemd 服务或 `/opt/dx-3fv/current` 时会退出，不会把重复安装
