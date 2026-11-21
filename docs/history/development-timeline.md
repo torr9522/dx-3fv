@@ -13,6 +13,8 @@
 - Phase 5：修正多端口新增业务 PathProfile 作用域，关闭 UDP session expiry 入队竞态，
   迁移 React Router 7，并以 10697 个真实 payload 完成 61 分钟持续流量验收；真实单包
   丢失与外部 TLS 失败保留为发布证据；随后完成最高 100 并发的七场景压力验证，修复
-  full Pool 自动分配穷举 65K 候选导致的 Panel 全局阻塞，不宣称零丢包或无限容量 SLA。
+  full Pool 自动分配穷举 65K 候选导致的 Panel 全局阻塞，并完成 Panel、SQLite、四
+  Agent、部分创建删除、Lease、编辑回滚、共享 Relay 和失败升级的真实恢复矩阵；不
+  宣称零丢包或无限容量 SLA。
 
 逐项根因和 Tag 见 `docs/issues/` 与 `docs/history/release-history.md`。

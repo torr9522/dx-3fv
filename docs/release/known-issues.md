@@ -18,8 +18,9 @@ datagram 入队竞态，并完成有针对性的 session lifecycle 修复。cana
 离线、进程重启、SQLite 错误或资源单调泄漏，但观察到 7 次 UDP 单包超时与 12 次外部
 TLS 握手失败。DX3FV-0061 已完成七场景、两轮、最高 100 并发验证，并修复并发创建时
 full Pool 穷举造成的全 Panel 阻塞；100 并发仍有 4 次外部 TLS 握手失败，容量上限未做
-破坏性探测。所有部分失败组合仍由 DX3FV-0062 验收；Release Candidate 不应描述为
-无限负载、零丢包或长期无故障。
+破坏性探测。DX3FV-0062 已完成 Panel/SQLite/四 Agent/Runtime/部分创建删除/Lease/
+编辑回滚/共享 Relay/失败升级的可恢复故障矩阵。Release Candidate 仍不应描述为无限
+负载、零丢包或长期无故障。
 
 ## 前端剩余依赖公告
 

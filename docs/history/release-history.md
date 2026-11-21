@@ -18,3 +18,4 @@ Phase 5 独立交付：
 - `v0.1.62-migrate-react-router-7`：Declarative Mode 迁移到 React Router 7.18.6。
 - `v0.1.63-verify-hour-scale-traffic`：61 分钟真实持续流量证据。
 - `v0.1.64-fix-full-pool-allocation-scan`：100 并发验收与 full Pool 自动分配阻塞修复。
+- `v0.1.65-verify-fault-recovery-matrix`：完整可恢复故障注入矩阵及最终业务回归证据。
