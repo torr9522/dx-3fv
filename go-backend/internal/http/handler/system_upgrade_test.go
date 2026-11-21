@@ -273,7 +273,31 @@ func TestSystemUpgradeVersionDataSurfacesLookupFailureReason(t *testing.T) {
 	}
 }
 
+func TestHasNewerReleaseUsesSemanticVersionOrder(t *testing.T) {
+	tests := []struct {
+		name    string
+		current string
+		latest  string
+		want    bool
+	}{
+		{name: "newer patch", current: "v1.0.0", latest: "v1.0.1", want: true},
+		{name: "stable newer than same rc", current: "v1.0.1-rc.1", latest: "v1.0.1", want: true},
+		{name: "older stable is not update", current: "v1.0.1-rc.1", latest: "v1.0.0", want: false},
+		{name: "equal", current: "v1.0.0", latest: "v1.0.0", want: false},
+		{name: "unknown local version", current: "dev", latest: "v1.0.1", want: false},
+		{name: "invalid remote version", current: "v1.0.0", latest: "latest", want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := hasNewerRelease(test.current, test.latest); got != test.want {
+				t.Fatalf("hasNewerRelease(%q, %q) = %v, want %v", test.current, test.latest, got, test.want)
+			}
+		})
+	}
+}
+
 func TestSystemCheckUpdatesUsesOnlyDX3FVRepository(t *testing.T) {
+	t.Setenv("FLUX_VERSION", "v1.0.1-rc.1")
 	originalGet := systemUpgradeHTTPGet
 	var requestedURL string
 	systemUpgradeHTTPGet = func(_ *http.Client, url string) (*http.Response, error) {
@@ -300,6 +324,9 @@ func TestSystemCheckUpdatesUsesOnlyDX3FVRepository(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), `"repository":"torr9522/dx-3fv"`) {
 		t.Fatalf("expected fixed repository, got %s", rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"hasUpdate":false`) {
+		t.Fatalf("older stable release must not be reported as an update: %s", rr.Body.String())
 	}
 }
 

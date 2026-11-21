@@ -16,6 +16,7 @@ import (
 
 	"go-backend/internal/http/response"
 	"go-backend/internal/panelupgrade"
+	"golang.org/x/mod/semver"
 )
 
 const (
@@ -333,7 +334,7 @@ func systemUpgradeVersionResponse(current, channel, latest string, lookupErr err
 	data := systemUpgradeVersionData{
 		CurrentVersion: current,
 		LatestVersion:  latest,
-		HasUpdate:      latest != "" && latest != current,
+		HasUpdate:      hasNewerRelease(current, latest),
 		Channel:        channel,
 		Repository:     githubRepo,
 		Capability:     capability,
@@ -344,6 +345,16 @@ func systemUpgradeVersionResponse(current, channel, latest string, lookupErr err
 		data.Reason = lookupErr.Error()
 	}
 	return data
+}
+
+func hasNewerRelease(current, latest string) bool {
+	current = strings.TrimSpace(current)
+	latest = strings.TrimSpace(latest)
+	if !semver.IsValid(current) || !semver.IsValid(latest) {
+		return false
+	}
+
+	return semver.Compare(latest, current) > 0
 }
 
 func (h *Handler) systemVersion(w http.ResponseWriter, r *http.Request) {
@@ -390,7 +401,7 @@ func (h *Handler) systemCheckUpdates(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, response.OK(systemUpgradeCheckData{
 		CurrentVersion: current,
 		LatestVersion:  latest,
-		HasUpdate:      latest != "" && latest != current,
+		HasUpdate:      hasNewerRelease(current, latest),
 		Channel:        channel,
 		Repository:     githubRepo,
 		Capability:     capability,
