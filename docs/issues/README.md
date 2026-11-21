@@ -37,3 +37,4 @@ Latest release-preparation issues:
 - `DX3FV-0060-hour-scale-traffic.md`
 - `DX3FV-0061-high-concurrency.md`
 - `DX3FV-0062-fault-recovery-matrix.md`
+- `DX3FV-0063-rc4-source-candidate.md`
