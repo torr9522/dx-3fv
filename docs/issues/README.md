@@ -45,3 +45,4 @@ Latest release-preparation issues:
 - `DX3FV-0068-update-policy-and-source.md`
 - `DX3FV-0069-semantic-update-order.md`
 - `DX3FV-0070-stable-v1.0.1-release.md`
+- `DX3FV-0071-publish-v1.0.1-installer.md`

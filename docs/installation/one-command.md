@@ -1,6 +1,6 @@
 # Debian 12 一键安装
 
-当前只支持 Debian 12 amd64。安装器下载固定 RC3 原生包并验证 SHA256；目标机只安装
+当前只支持 Debian 12 amd64。安装器下载固定 `v1.0.1` 原生包并验证 SHA256；目标机只安装
 Caddy、CA、curl、jq、OpenSSL、SQLite CLI、tar/gzip 等运行/运维依赖，不安装 Go、Node
 或 pnpm。
 
@@ -19,7 +19,7 @@ DX3FV_DOMAIN=panel.example.com \
 DX3FV_ACME_MODE=staging \
 DX3FV_ADMIN_MODE=random \
 bash <(curl -fsSL https://raw.githubusercontent.com/torr9522/dx-3fv/main/scripts/install.sh) \
-  --non-interactive --version v1.0.0
+  --non-interactive --version v1.0.1
 ```
 
 脚本检测到已有数据库、systemd 服务或 `/opt/dx-3fv/current` 时会退出，不会把重复安装
