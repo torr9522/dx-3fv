@@ -18,6 +18,19 @@ import (
 
 const ixRouteOwnerEntry = "ix_route_entry"
 const ixRouteOwnerIX = "ix_route_ix"
+const ixRouteEntryAutoMinPort = 10000
+
+func ixRoutePortAllocationRequest(poolID int64, requestedPort int, protocols []string, ownerType string, ownerID int64, entryLane bool) repo.IXPortAllocationRequest {
+	request := repo.IXPortAllocationRequest{
+		PoolID: poolID, RequestedPort: requestedPort, Protocols: protocols,
+		OwnerType: ownerType, OwnerID: ownerID, Manual: requestedPort > 0,
+	}
+	if entryLane && requestedPort == 0 {
+		request.AutoMinPort = ixRouteEntryAutoMinPort
+		request.RandomAuto = true
+	}
+	return request
+}
 
 type ixRouteCreateRequest struct {
 	ID                 int64  `json:"id"`
@@ -160,13 +173,13 @@ func (h *Handler) ixRouteCreate(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, response.Err(-2, err.Error()))
 		return
 	}
-	entryAllocation, err := h.repo.AllocateIXPorts(repo.IXPortAllocationRequest{PoolID: profile.EntryPoolID, RequestedPort: request.EntryPort, Protocols: protocols, OwnerType: ixRouteOwnerEntry, OwnerID: route.ID, Manual: request.EntryPort > 0})
+	entryAllocation, err := h.repo.AllocateIXPorts(ixRoutePortAllocationRequest(profile.EntryPoolID, request.EntryPort, protocols, ixRouteOwnerEntry, route.ID, true))
 	if err != nil {
 		_ = h.repo.SetIXRouteState(route.ID, "deleted", "error", err.Error())
 		response.WriteJSON(w, response.Err(-2, "前置入口端口分配失败: "+err.Error()))
 		return
 	}
-	ixAllocation, err := h.repo.AllocateIXPorts(repo.IXPortAllocationRequest{PoolID: profile.IXPoolID, RequestedPort: request.IXPort, Protocols: protocols, OwnerType: ixRouteOwnerIX, OwnerID: route.ID, Manual: request.IXPort > 0})
+	ixAllocation, err := h.repo.AllocateIXPorts(ixRoutePortAllocationRequest(profile.IXPoolID, request.IXPort, protocols, ixRouteOwnerIX, route.ID, false))
 	if err != nil {
 		_ = h.repo.RequestIXPortLeaseRelease(ixRouteOwnerEntry, route.ID)
 		_ = h.repo.CompleteIXPortLeaseRelease(ixRouteOwnerEntry, route.ID)
@@ -235,7 +248,7 @@ func (h *Handler) ixRouteCreate(w http.ResponseWriter, r *http.Request) {
 			response.WriteJSON(w, response.Err(-2, err.Error()))
 			return
 		}
-		replacement, err := h.repo.AllocateIXPorts(repo.IXPortAllocationRequest{PoolID: poolID, Protocols: protocols, OwnerType: ownerType, OwnerID: route.ID})
+		replacement, err := h.repo.AllocateIXPorts(ixRoutePortAllocationRequest(poolID, 0, protocols, ownerType, route.ID, laneErr.role == "entry"))
 		if err != nil {
 			h.cleanupFailedIXRoute(route.ID, err)
 			response.WriteJSON(w, response.Err(-2, "自动端口重试失败: "+err.Error()))
@@ -286,7 +299,7 @@ func activeProtocolsFromLeases(leases []model.IXPortLease) map[string]model.IXPo
 	return out
 }
 
-func (h *Handler) prepareIXRouteEditLane(ownerType, migrationOwner string, routeID, migrationID, poolID int64, currentPublicPort, requestedPort int, protocols []string) (model.IXPortResource, []int64, error) {
+func (h *Handler) prepareIXRouteEditLane(ownerType, migrationOwner string, routeID, migrationID, poolID int64, currentPublicPort, requestedPort int, protocols []string, entryLane bool) (model.IXPortResource, []int64, error) {
 	leases, err := h.repo.ListIXPortLeases(ownerType, routeID)
 	if err != nil {
 		return model.IXPortResource{}, nil, err
@@ -325,13 +338,13 @@ func (h *Handler) prepareIXRouteEditLane(ownerType, migrationOwner string, route
 			}
 		}
 		if len(missing) > 0 {
-			if _, err := h.repo.AllocateIXPorts(repo.IXPortAllocationRequest{PoolID: poolID, RequestedPort: requestedPort, Protocols: missing, OwnerType: migrationOwner, OwnerID: migrationID, Manual: true}); err != nil {
+			if _, err := h.repo.AllocateIXPorts(ixRoutePortAllocationRequest(poolID, requestedPort, missing, migrationOwner, migrationID, entryLane)); err != nil {
 				return model.IXPortResource{}, nil, err
 			}
 		}
 		return *currentResource, releaseIDs, nil
 	}
-	allocation, err := h.repo.AllocateIXPorts(repo.IXPortAllocationRequest{PoolID: poolID, RequestedPort: requestedPort, Protocols: protocols, OwnerType: migrationOwner, OwnerID: migrationID, Manual: requestedPort > 0})
+	allocation, err := h.repo.AllocateIXPorts(ixRoutePortAllocationRequest(poolID, requestedPort, protocols, migrationOwner, migrationID, entryLane))
 	if err != nil {
 		return model.IXPortResource{}, nil, err
 	}
@@ -471,12 +484,12 @@ func (h *Handler) ixRouteUpdate(w http.ResponseWriter, r *http.Request) {
 		failPreparing(errors.New("旧 Runtime 状态缺失"))
 		return
 	}
-	entryResource, entryRelease, err := h.prepareIXRouteEditLane(ixRouteOwnerEntry, ixRouteMigrationOwnerEntry, current.ID, migration.ID, profile.EntryPoolID, current.EntryPort, request.EntryPort, protocols)
+	entryResource, entryRelease, err := h.prepareIXRouteEditLane(ixRouteOwnerEntry, ixRouteMigrationOwnerEntry, current.ID, migration.ID, profile.EntryPoolID, current.EntryPort, request.EntryPort, protocols, true)
 	if err != nil {
 		failPreparing(errors.New("前置入口端口迁移失败: " + err.Error()))
 		return
 	}
-	ixResource, ixRelease, err := h.prepareIXRouteEditLane(ixRouteOwnerIX, ixRouteMigrationOwnerIX, current.ID, migration.ID, profile.IXPoolID, current.IXPublicPort, request.IXPort, protocols)
+	ixResource, ixRelease, err := h.prepareIXRouteEditLane(ixRouteOwnerIX, ixRouteMigrationOwnerIX, current.ID, migration.ID, profile.IXPoolID, current.IXPublicPort, request.IXPort, protocols, false)
 	if err != nil {
 		failPreparing(errors.New("IX 中间端口迁移失败: " + err.Error()))
 		return

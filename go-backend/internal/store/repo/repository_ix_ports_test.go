@@ -86,6 +86,84 @@ func TestIXFullPoolAutoAllocationMaterializesOnlySelectedResources(t *testing.T)
 	}
 }
 
+func TestIXEntryAutoAllocationUsesRandomEligibleRange(t *testing.T) {
+	r := openIXPortTestRepo(t)
+	pool := createIXTestPool(t, r, 13, "gz2-entry-auto", IXPoolKindFull, 1, 65535)
+	seen := make(map[int]bool)
+	for ownerID := int64(1); ownerID <= 6; ownerID++ {
+		allocation, err := r.AllocateIXPorts(IXPortAllocationRequest{
+			PoolID: pool.ID, AutoMinPort: 10000, RandomAuto: true,
+			Protocols: []string{"tcp"}, OwnerType: "route", OwnerID: ownerID,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		port := allocation.Resource.InternalPort
+		if port < 10000 || port > 65535 {
+			t.Fatalf("automatic entry port %d is outside 10000-65535", port)
+		}
+		if seen[port] {
+			t.Fatalf("automatic entry port %d was reused", port)
+		}
+		seen[port] = true
+	}
+
+	manual, err := r.AllocateIXPorts(IXPortAllocationRequest{
+		PoolID: pool.ID, RequestedPort: 9999, AutoMinPort: 10000, RandomAuto: true,
+		Protocols: []string{"tcp"}, OwnerType: "route", OwnerID: 7, Manual: true,
+	})
+	if err != nil {
+		t.Fatalf("manual port below automatic minimum was rejected: %v", err)
+	}
+	if manual.Resource.InternalPort != 9999 || !manual.Leases[0].Manual {
+		t.Fatalf("manual allocation changed: %+v", manual)
+	}
+}
+
+func TestIXRandomPortOrderIsCompleteAndNotSequential(t *testing.T) {
+	ports, err := randomIXPortOrder(10000, 10015)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ports) != 16 {
+		t.Fatalf("random order contains %d ports, want 16", len(ports))
+	}
+	seen := make(map[int]bool, len(ports))
+	sequential := true
+	for i, port := range ports {
+		if port < 10000 || port > 10015 || seen[port] {
+			t.Fatalf("invalid random permutation: %v", ports)
+		}
+		seen[port] = true
+		if i > 0 && port != ports[i-1]+1 {
+			sequential = false
+		}
+	}
+	if sequential {
+		t.Fatalf("random order remained ascending: %v", ports)
+	}
+}
+
+func TestIXEntryAutoAllocationSkipsObservedConflicts(t *testing.T) {
+	r := openIXPortTestRepo(t)
+	pool := createIXTestPool(t, r, 14, "gz2-conflict", IXPoolKindFull, 1, 65535)
+	for _, port := range []int{65533, 65534} {
+		if err := r.UpsertIXPortObservation(&model.IXPortObservation{NodeID: 14, InternalPort: port, Protocol: "tcp", State: "conflict"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	allocation, err := r.AllocateIXPorts(IXPortAllocationRequest{
+		PoolID: pool.ID, AutoMinPort: 65533, RandomAuto: true,
+		Protocols: []string{"tcp"}, OwnerType: "route", OwnerID: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allocation.Resource.InternalPort != 65535 {
+		t.Fatalf("observed conflict was allocated: %+v", allocation.Resource)
+	}
+}
+
 func TestIXFullPoolKeepsTCPAndUDPOwnershipIndependent(t *testing.T) {
 	r := openIXPortTestRepo(t)
 	pool := createIXTestPool(t, r, 11, "gz2", IXPoolKindFull, 44000, 44010)

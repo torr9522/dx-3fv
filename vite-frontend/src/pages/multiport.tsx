@@ -993,8 +993,8 @@ export default function MultiportPage() {
               <Input
                 description={
                   routeForm.id
-                    ? "保留原值不迁移；清空后重新自动分配；SSH 22 永久排除"
-                    : "留空自动分配；SSH 22 永久排除"
+                    ? "保留原值不迁移；清空后随机分配 10000-65535 可用端口，并排除保留/已占用端口（含 SSH 22）"
+                    : "留空随机分配 10000-65535 可用端口，并排除保留/已占用端口（含 SSH 22）"
                 }
                 label="前置入口端口"
                 type="number"

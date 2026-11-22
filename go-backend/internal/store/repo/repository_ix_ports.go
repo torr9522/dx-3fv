@@ -1,8 +1,10 @@
 package repo
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"sort"
 	"strings"
 	"time"
@@ -21,6 +23,8 @@ const (
 type IXPortAllocationRequest struct {
 	PoolID        int64
 	RequestedPort int
+	AutoMinPort   int
+	RandomAuto    bool
 	Protocols     []string
 	OwnerType     string
 	OwnerID       int64
@@ -249,7 +253,7 @@ func (r *Repository) AllocateIXPorts(req IXPortAllocationRequest) (*IXPortAlloca
 			return errors.New("port pool is disabled")
 		}
 
-		candidates, err := ixPortCandidates(tx, &pool, req.RequestedPort, protocols)
+		candidates, err := ixPortCandidates(tx, &pool, req.RequestedPort, req.AutoMinPort, req.RandomAuto, protocols)
 		if err != nil {
 			return err
 		}
@@ -300,7 +304,7 @@ func (r *Repository) AllocateIXPorts(req IXPortAllocationRequest) (*IXPortAlloca
 	return &allocated, nil
 }
 
-func ixPortCandidates(tx *gorm.DB, pool *model.IXPortPool, requested int, protocols []string) ([]model.IXPortResource, error) {
+func ixPortCandidates(tx *gorm.DB, pool *model.IXPortPool, requested, autoMinPort int, randomAuto bool, protocols []string) ([]model.IXPortResource, error) {
 	if pool.Kind == IXPoolKindNAT {
 		query := tx.Where("pool_id = ? AND excluded = ? AND verification_status = ?", pool.ID, false, "verified")
 		if requested > 0 {
@@ -329,21 +333,34 @@ func ixPortCandidates(tx *gorm.DB, pool *model.IXPortPool, requested int, protoc
 		return available, nil
 	}
 
-	start := pool.NextPort
-	if start < pool.RangeStart || start > pool.RangeEnd {
-		start = pool.RangeStart
+	autoStart := pool.RangeStart
+	if autoMinPort > autoStart {
+		autoStart = autoMinPort
 	}
-	ports := make([]int, 0, pool.RangeEnd-pool.RangeStart+1)
+	if requested == 0 && autoStart > pool.RangeEnd {
+		return nil, errors.New("automatic port range has no eligible ports")
+	}
+	ports := make([]int, 0, pool.RangeEnd-autoStart+1)
 	if requested > 0 {
 		if requested < pool.RangeStart || requested > pool.RangeEnd {
 			return nil, errors.New("requested port is outside the eligible range")
 		}
 		ports = append(ports, requested)
+	} else if randomAuto {
+		randomPorts, err := randomIXPortOrder(autoStart, pool.RangeEnd)
+		if err != nil {
+			return nil, err
+		}
+		ports = randomPorts
 	} else {
+		start := pool.NextPort
+		if start < autoStart || start > pool.RangeEnd {
+			start = autoStart
+		}
 		for port := start; port <= pool.RangeEnd; port++ {
 			ports = append(ports, port)
 		}
-		for port := pool.RangeStart; port < start; port++ {
+		for port := autoStart; port < start; port++ {
 			ports = append(ports, port)
 		}
 	}
@@ -385,6 +402,43 @@ func ixPortCandidates(tx *gorm.DB, pool *model.IXPortPool, requested int, protoc
 		return []model.IXPortResource{resource}, nil
 	}
 	return nil, nil
+}
+
+func randomIXPortOrder(start, end int) ([]int, error) {
+	if start > end {
+		return nil, errors.New("invalid random port range")
+	}
+	size := end - start + 1
+	offsetValue, err := rand.Int(rand.Reader, big.NewInt(int64(size)))
+	if err != nil {
+		return nil, fmt.Errorf("generate random port start: %w", err)
+	}
+	step := 1
+	if size > 3 {
+		for {
+			candidate, randomErr := rand.Int(rand.Reader, big.NewInt(int64(size-2)))
+			if randomErr != nil {
+				return nil, fmt.Errorf("generate random port step: %w", randomErr)
+			}
+			step = int(candidate.Int64()) + 2
+			if greatestCommonDivisor(step, size) == 1 {
+				break
+			}
+		}
+	}
+	offset := int(offsetValue.Int64())
+	ports := make([]int, size)
+	for i := range ports {
+		ports[i] = start + (offset+i*step)%size
+	}
+	return ports, nil
+}
+
+func greatestCommonDivisor(a, b int) int {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	return a
 }
 
 func ixPortAlreadyOwned(tx *gorm.DB, nodeID int64, port int, protocols []string) (bool, error) {

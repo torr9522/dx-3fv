@@ -47,3 +47,4 @@ Latest release-preparation issues:
 - `DX3FV-0070-stable-v1.0.1-release.md`
 - `DX3FV-0071-publish-v1.0.1-installer.md`
 - `DX3FV-0072-multiport-landing-copy.md`
+- `DX3FV-0073-entry-auto-port-policy.md`

@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -182,6 +183,32 @@ func TestIXRouteScopedCreateRejectsCrossPathTamperingWithoutResidue(t *testing.T
 	}
 }
 
+func TestIXRouteAutomaticEntryPortsUseRandomHighRange(t *testing.T) {
+	agent, profile := setupIXRouteControlPlane(t)
+	first := createIXRouteThroughHandler(t, agent, profile.ID, "auto-entry-first", 0, 38001)
+	second := createIXRouteThroughHandler(t, agent, profile.ID, "auto-entry-second", 0, 38002)
+	for _, route := range []*model.IXRoute{first, second} {
+		if route.EntryPort < ixRouteEntryAutoMinPort || route.EntryPort > 65535 {
+			t.Fatalf("automatic entry port is outside policy: %+v", route)
+		}
+		leases, err := agent.h.repo.ListIXPortLeases(ixRouteOwnerEntry, route.ID)
+		if err != nil || len(leases) != 2 {
+			t.Fatalf("entry leases missing: %+v %v", leases, err)
+		}
+		for _, lease := range leases {
+			if lease.Manual {
+				t.Fatalf("automatic entry lease marked manual: %+v", lease)
+			}
+		}
+	}
+	if first.EntryPort == second.EntryPort {
+		t.Fatalf("automatic entry port was reused: %d", first.EntryPort)
+	}
+	if first.IXPublicPort != 38001 || second.IXPublicPort != 38002 {
+		t.Fatalf("entry policy changed IX NAT allocation: first=%+v second=%+v", first, second)
+	}
+}
+
 func mutateIXRouteThroughHandler(t *testing.T, handler func(http.ResponseWriter, *http.Request), path string, id int64) {
 	t.Helper()
 	recorder := httptest.NewRecorder()
@@ -280,6 +307,40 @@ func TestIXRouteAutomaticPortRetriesRuntimeBindConflict(t *testing.T) {
 	}
 	if len(leasing) != 4 || leasing[0].State != "released" || leasing[1].State != "released" || leasing[2].State != "active" || leasing[3].State != "active" {
 		t.Fatalf("retry lease generations are incorrect: %+v", leasing)
+	}
+}
+
+func TestIXRouteAutomaticEntryPortRetriesRuntimeBindConflictInHighRange(t *testing.T) {
+	agent, profile := setupIXRouteControlPlane(t)
+	failedPort := 0
+	agent.responseHook = func(command cleanupAgentCommand) (bool, string) {
+		if command.Type == "UpdateService" && strings.Contains(string(command.Data), "_entry_tcp") && failedPort == 0 {
+			var services []struct {
+				Addr string `json:"addr"`
+			}
+			if err := json.Unmarshal(command.Data, &services); err != nil {
+				t.Fatal(err)
+			}
+			if len(services) == 0 {
+				t.Fatal("entry update has no services")
+			}
+			_, portText, err := net.SplitHostPort(services[0].Addr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := fmt.Sscanf(portText, "%d", &failedPort); err != nil {
+				t.Fatal(err)
+			}
+			return false, "listen tcp: bind: address already in use"
+		}
+		return true, ""
+	}
+	route := createIXRouteThroughHandler(t, agent, profile.ID, "entry-retry", 0, 38001)
+	if failedPort < ixRouteEntryAutoMinPort {
+		t.Fatalf("injected conflict port %d is below policy minimum", failedPort)
+	}
+	if route.EntryPort < ixRouteEntryAutoMinPort || route.EntryPort == failedPort {
+		t.Fatalf("entry retry did not choose another high port: failed=%d route=%+v", failedPort, route)
 	}
 }
 
@@ -542,6 +603,25 @@ func TestIXRouteEditMigratesListenersBeforeReleasingOldLeases(t *testing.T) {
 	}
 	if migration, err := agent.h.repo.GetActiveIXRouteMigration(route.ID); err != nil || migration != nil {
 		t.Fatalf("completed edit retained migration: %+v %v", migration, err)
+	}
+}
+
+func TestIXRouteEditClearedEntryPortUsesRandomHighRange(t *testing.T) {
+	agent, profile := setupIXRouteControlPlane(t)
+	route := createIXRouteThroughHandler(t, agent, profile.ID, "clear-entry", 9000, 38001)
+	recorder := updateIXRouteThroughHandler(t, agent, route, 0, 38001, "tcp_udp")
+	if code := ixPortResponseCode(t, recorder); code != 0 {
+		t.Fatalf("route edit failed code=%d body=%s", code, recorder.Body.String())
+	}
+	stored, err := agent.h.repo.GetIXRoute(route.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.EntryPort < ixRouteEntryAutoMinPort || stored.EntryPort == route.EntryPort {
+		t.Fatalf("cleared entry port did not use automatic high range: before=%d after=%d", route.EntryPort, stored.EntryPort)
+	}
+	if stored.IXPublicPort != 38001 {
+		t.Fatalf("clearing entry port moved IX NAT mapping: %+v", stored)
 	}
 }
 
