@@ -2494,6 +2494,8 @@ func (h *Handler) forwardUpdate(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, response.ErrDefault("转发ID不能为空"))
 		return
 	}
+	unlockForward := h.lockForwardLifecycle(id)
+	defer unlockForward()
 	forward, actorUserID, actorRole, err := h.resolveForwardAccess(r, id)
 	if err != nil {
 		if errors.Is(err, errForwardNotFound) {

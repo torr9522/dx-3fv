@@ -199,6 +199,122 @@ func TestForwardOwnershipAndScopeContracts(t *testing.T) {
 	})
 }
 
+func TestConcurrentForwardUpdateFailureCannotRollbackNewerSuccess(t *testing.T) {
+	secret := "contract-jwt-secret"
+	router, repo := setupContractRouter(t, secret)
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	adminToken, err := auth.GenerateToken(1, "admin_user", 0, secret)
+	if err != nil {
+		t.Fatalf("generate admin token: %v", err)
+	}
+
+	now := time.Now().UnixMilli()
+	if err := repo.DB().Exec(`
+		INSERT INTO node(name, secret, server_ip, server_ip_v4, server_ip_v6, port, interface_name, version, http, tls, socks, created_time, updated_time, status, tcp_listen_addr, udp_listen_addr, inx)
+		VALUES('concurrent-forward-node', 'concurrent-forward-secret', '10.80.0.1', '10.80.0.1', '', '42000-42010', '', 'v1', 1, 1, 1, ?, ?, 1, '[::]', '[::]', 0)
+	`, now, now).Error; err != nil {
+		t.Fatalf("insert node: %v", err)
+	}
+	nodeID := mustLastInsertID(t, repo, "concurrent-forward-node")
+	if err := repo.DB().Exec(`
+		INSERT INTO forward(user_id, user_name, name, tunnel_id, remote_addr, strategy, protocol, in_flow, out_flow, created_time, updated_time, status, inx)
+		VALUES(1, 'admin_user', 'concurrent-forward', 0, '1.1.1.1:443', 'fifo', 'tcp+udp', 0, 0, ?, ?, 1, 0)
+	`, now, now).Error; err != nil {
+		t.Fatalf("insert forward: %v", err)
+	}
+	forwardID := mustLastInsertID(t, repo, "concurrent-forward")
+	if err := repo.DB().Exec(`INSERT INTO forward_port(forward_id, node_id, port) VALUES(?, ?, 42001)`, forwardID, nodeID).Error; err != nil {
+		t.Fatalf("insert forward port: %v", err)
+	}
+
+	const targetA = "8.8.8.8:53"
+	const targetB = "9.9.9.9:443"
+	var mu sync.Mutex
+	armed := false
+	gateClaimed := false
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	stopNode := startMockNodeSessionWithCommandRecorder(t, server.URL, "concurrent-forward-secret", func(cmdType string, data json.RawMessage) (bool, string) {
+		kind := strings.TrimSpace(cmdType)
+		payload := string(data)
+		mu.Lock()
+		isArmed := armed
+		gate := isArmed && !gateClaimed && strings.EqualFold(kind, "UpdateService") && strings.Contains(payload, targetA)
+		if gate {
+			gateClaimed = true
+			close(entered)
+		}
+		mu.Unlock()
+		if gate {
+			<-release
+		}
+		if isArmed && (strings.EqualFold(kind, "UpdateService") || strings.EqualFold(kind, "AddService")) && strings.Contains(payload, targetA) {
+			return true, "forced target A apply failure"
+		}
+		return false, ""
+	})
+	defer stopNode()
+	waitNodeStatus(t, repo, nodeID, 1)
+	time.Sleep(200 * time.Millisecond)
+	mu.Lock()
+	armed = true
+	mu.Unlock()
+
+	update := func(remoteAddr string) *httptest.ResponseRecorder {
+		body, marshalErr := json.Marshal(map[string]interface{}{"id": forwardID, "remoteAddr": remoteAddr})
+		if marshalErr != nil {
+			t.Errorf("marshal update: %v", marshalErr)
+			return nil
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/forward/update", bytes.NewReader(body))
+		req.Header.Set("Authorization", adminToken)
+		req.Header.Set("Content-Type", "application/json")
+		res := httptest.NewRecorder()
+		router.ServeHTTP(res, req)
+		return res
+	}
+
+	firstDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() { firstDone <- update(targetA) }()
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("first update did not reach the controlled runtime failure")
+	}
+
+	secondDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() { secondDone <- update(targetB) }()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if mustQueryString(t, repo, `SELECT remote_addr FROM forward WHERE id = ?`, forwardID) == targetB {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	close(release)
+
+	firstRes := <-firstDone
+	secondRes := <-secondDone
+	var firstOut, secondOut response.R
+	if err := json.NewDecoder(firstRes.Body).Decode(&firstOut); err != nil {
+		t.Fatalf("decode first response: %v", err)
+	}
+	if err := json.NewDecoder(secondRes.Body).Decode(&secondOut); err != nil {
+		t.Fatalf("decode second response: %v", err)
+	}
+	if firstOut.Code >= 0 {
+		t.Fatalf("expected controlled first update failure, got code=%d msg=%q", firstOut.Code, firstOut.Msg)
+	}
+	if secondOut.Code != 0 {
+		t.Fatalf("expected newer update success, got code=%d msg=%q", secondOut.Code, secondOut.Msg)
+	}
+	if got := mustQueryString(t, repo, `SELECT remote_addr FROM forward WHERE id = ?`, forwardID); got != targetB {
+		t.Fatalf("older failed update rolled back newer success: got %q want %q", got, targetB)
+	}
+}
+
 func TestForwardSwitchTunnelRollbackOnSyncFailure(t *testing.T) {
 	secret := "contract-jwt-secret"
 	router, repo := setupContractRouter(t, secret)

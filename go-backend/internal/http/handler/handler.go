@@ -39,8 +39,10 @@ type Handler struct {
 	healthCheck     *health.Checker
 	nftablesManager nftablesRuntimeManager
 
-	tunnelLifecycleMu    sync.Mutex
-	tunnelLifecycleLocks map[int64]*tunnelLifecycleLock
+	tunnelLifecycleMu     sync.Mutex
+	tunnelLifecycleLocks  map[int64]*tunnelLifecycleLock
+	forwardLifecycleMu    sync.Mutex
+	forwardLifecycleLocks map[int64]*forwardLifecycleLock
 
 	peerResourceMu sync.Mutex
 	captchaMu      sync.Mutex
