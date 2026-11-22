@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-INSTALLER_VERSION="1.0.4"
-DEFAULT_VERSION="v1.0.4"
+INSTALLER_VERSION="1.0.5"
+DEFAULT_VERSION="v1.0.5"
 REPOSITORY="torr9522/dx-3fv"
 PANEL_ADDR="127.0.0.1:17365"
 STAGING_CA="https://acme-staging-v02.api.letsencrypt.org/directory"
@@ -59,7 +59,7 @@ Environment for unattended acceptance:
   DX3FV_ADMIN_USERNAME  Required with custom mode
   DX3FV_ADMIN_PASSWORD  Required with custom mode
 
-The stable installer defaults to the fixed v1.0.4 tag; --version never
+The stable installer defaults to the fixed v1.0.5 tag; --version never
 follows latest or an unversioned development artifact.
 EOF
 }
@@ -92,6 +92,7 @@ artifact_name() {
     v1.0.2) printf 'dx-3fv-v1.0.2.tar.gz\n' ;;
     v1.0.3) printf 'dx-3fv-v1.0.3.tar.gz\n' ;;
     v1.0.4) printf 'dx-3fv-v1.0.4.tar.gz\n' ;;
+    v1.0.5) printf 'dx-3fv-v1.0.5.tar.gz\n' ;;
     *) return 1 ;;
   esac
 }
@@ -105,6 +106,7 @@ artifact_sha256() {
     v1.0.2) printf 'eb42ef55ed345f7c048dec1065790d4ee9ac28341648637bfb6590ed27822e78\n' ;;
     v1.0.3) printf '647143b02aed03d69272cf46cf6c7445c1e05c8d818c49b737293a643218ab69\n' ;;
     v1.0.4) printf '36d95737dc215404142df737c6cb25f269db72e8146082b497cd11f543cc5780\n' ;;
+    v1.0.5) printf '94c80dc29efdeaecb3ed641b74fa6f8b08e73fcb1ece6b357440c530b20d7d2e\n' ;;
     *) return 1 ;;
   esac
 }
