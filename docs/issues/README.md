@@ -49,3 +49,4 @@ Latest release-preparation issues:
 - `DX3FV-0072-multiport-landing-copy.md`
 - `DX3FV-0073-entry-auto-port-policy.md`
 - `DX3FV-0074-unified-entry-auto-port-policy.md`
+- `DX3FV-0075-publish-v1.0.4-installer.md`
