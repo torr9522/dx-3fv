@@ -8,7 +8,7 @@ import {
   NavbarContent,
 } from "@/shadcn-bridge/heroui/navbar";
 import { BrandLogo } from "@/components/brand-logo";
-import { siteConfig, getCachedConfig } from "@/config/site";
+import { siteConfig, updateSiteConfig } from "@/config/site";
 import { useWebViewMode } from "@/hooks/useWebViewMode";
 
 export const Navbar = () => {
@@ -21,12 +21,11 @@ export const Navbar = () => {
     // 异步检查是否有更新的配置
     const checkForUpdates = async () => {
       try {
-        const cachedAppName = await getCachedConfig("app_name");
+        await updateSiteConfig();
+        const resolvedAppName = siteConfig.name;
 
-        if (cachedAppName && cachedAppName !== appName) {
-          setAppName(cachedAppName);
-          // 同步更新siteConfig
-          siteConfig.name = cachedAppName;
+        if (resolvedAppName !== appName) {
+          setAppName(resolvedAppName);
         }
       } catch {}
     };
@@ -37,12 +36,9 @@ export const Navbar = () => {
     // 监听配置更新事件
     const handleConfigUpdate = async () => {
       try {
-        const cachedAppName = await getCachedConfig("app_name");
+        await updateSiteConfig();
 
-        if (cachedAppName) {
-          setAppName(cachedAppName);
-          siteConfig.name = cachedAppName;
-        }
+        setAppName(siteConfig.name);
       } catch {}
     };
 

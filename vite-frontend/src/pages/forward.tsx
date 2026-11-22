@@ -5608,8 +5608,8 @@ export default function ForwardPage() {
                   }
                 }}
               >
-                <SelectItem key="flvx" textValue="flvx格式">
-                  flvx格式（管道分隔）
+                <SelectItem key="flvx" textValue="兼容格式">
+                  兼容格式（管道分隔）
                 </SelectItem>
                 <SelectItem key="ny" textValue="ny格式">
                   ny格式（JSON）

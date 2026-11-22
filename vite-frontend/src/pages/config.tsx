@@ -152,7 +152,7 @@ const CONFIG_ITEMS: ConfigItem[] = [
   },
   {
     key: "hide_footer_brand",
-    label: "隐藏页面底部 FLVX 版权信息",
+    label: "隐藏页面底部 DX-3FV 品牌信息",
     description: "需商业版授权才能生效",
     type: "switch",
   },

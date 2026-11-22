@@ -15,9 +15,9 @@ import type { ThemePackage } from "../types";
 const defaultTheme: ThemePackage = {
   id: "default",
   name: "默认主题",
-  author: "FLVX Team",
+  author: "DX-3FV Team",
   version: "1.0.0",
-  description: "FLVX 内置默认蓝色主题",
+  description: "DX-3FV 内置默认蓝色主题",
 
   tokens: {
     light: {

@@ -7,6 +7,7 @@ export type SiteConfig = typeof siteConfig;
 const CACHE_PREFIX = "vite_config_";
 const VERSION = import.meta.env.VITE_APP_VERSION || "dev";
 const APP_VERSION = "1.0.3";
+const DEFAULT_BRAND_NAME = "DX-3FV";
 const DEFAULT_FAVICON = "/favicon.ico";
 const FAVICON_LINK_ID = "app-favicon";
 const PUBLIC_BRAND_CONFIG_KEYS = [
@@ -108,7 +109,7 @@ const fetchPublicBrandConfigs = async (): Promise<Record<string, string>> => {
 const getInitialConfig = () => {
   if (typeof window === "undefined") {
     return {
-      name: "FLVX",
+      name: DEFAULT_BRAND_NAME,
       version: VERSION,
       app_version: APP_VERSION,
       github_repo: GITHUB_REPO,
@@ -141,7 +142,7 @@ const getInitialConfig = () => {
 
   if (cachedAppName) {
     return {
-      name: isCommercial ? cachedAppName : "FLVX",
+      name: isCommercial ? cachedAppName : DEFAULT_BRAND_NAME,
       version: VERSION,
       app_version: APP_VERSION,
       github_repo: GITHUB_REPO,
@@ -156,7 +157,7 @@ const getInitialConfig = () => {
   }
 
   return {
-    name: "FLVX",
+    name: DEFAULT_BRAND_NAME,
     version: VERSION,
     app_version: APP_VERSION,
     github_repo: GITHUB_REPO,
@@ -427,7 +428,8 @@ export const updateSiteConfig = async (configMap?: Record<string, string>) => {
     ? String(resolvedConfigMap.app_bg_image_dark || "").trim()
     : (siteConfig.app_bg_image_dark || "").trim();
 
-  siteConfig.name = resolvedCommercial && appName ? appName : "FLVX";
+  siteConfig.name =
+    resolvedCommercial && appName ? appName : DEFAULT_BRAND_NAME;
   siteConfig.app_logo = resolvedCommercial ? appLogo : "";
   siteConfig.app_favicon = resolvedCommercial ? appFavicon : "";
   siteConfig.app_bg_image = appBgImage;
