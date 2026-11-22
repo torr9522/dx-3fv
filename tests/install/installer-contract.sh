@@ -14,8 +14,8 @@ validate_password 'Strong-Password-2026!'
 ! validate_password 'short'
 [[ $(artifact_name v1.0.0-rc.3) == dx-3fv-v1.0.0-rc.3.tar.gz ]]
 [[ $(artifact_sha256 v1.0.0-rc.3) == 85d5aa4e5e68b2d286bfae08efc97a0a3e16febaa2684ff8226c95c43b59874f ]]
-[[ $DEFAULT_VERSION == v1.0.5 ]]
-[[ $INSTALLER_VERSION == 1.0.5 ]]
+[[ $DEFAULT_VERSION == v1.0.6 ]]
+[[ $INSTALLER_VERSION == 1.0.6 ]]
 [[ $(artifact_name v1.0.0-rc.4) == dx-3fv-v1.0.0-rc.4.tar.gz ]]
 [[ $(artifact_sha256 v1.0.0-rc.4) == 86493c9fac8500ef3e8d3504bc555ea14850e915f5f274012ed5f6f594406c17 ]]
 [[ $(artifact_name v1.0.0) == dx-3fv-v1.0.0.tar.gz ]]
@@ -30,6 +30,8 @@ validate_password 'Strong-Password-2026!'
 [[ $(artifact_sha256 v1.0.4) == 36d95737dc215404142df737c6cb25f269db72e8146082b497cd11f543cc5780 ]]
 [[ $(artifact_name v1.0.5) == dx-3fv-v1.0.5.tar.gz ]]
 [[ $(artifact_sha256 v1.0.5) == 94c80dc29efdeaecb3ed641b74fa6f8b08e73fcb1ece6b357440c530b20d7d2e ]]
+[[ $(artifact_name v1.0.6) == dx-3fv-v1.0.6.tar.gz ]]
+[[ $(artifact_sha256 v1.0.6) == 0ee969705e6c5096047247b865b27905e926d7e5abf744a4cf713407d9c5691d ]]
 ! artifact_name latest
 
 archive="$repo_root/release/artifacts/$(artifact_name v1.0.0-rc.3)"
@@ -48,7 +50,7 @@ archive="$repo_root/release/artifacts/$(artifact_name v1.0.1)"
 printf '%s  %s\n' "$(artifact_sha256 v1.0.1)" "$archive" | sha256sum -c -
 tar -tzf "$archive" 'dx-3fv-v1.0.1/scripts/install-native.sh' >/dev/null
 
-for version in v1.0.2 v1.0.3 v1.0.4 v1.0.5; do
+for version in v1.0.2 v1.0.3 v1.0.4 v1.0.5 v1.0.6; do
   archive="$repo_root/release/artifacts/$(artifact_name "$version")"
   printf '%s  %s\n' "$(artifact_sha256 "$version")" "$archive" | sha256sum -c -
   tar -tzf "$archive" "dx-3fv-${version}/scripts/install-native.sh" >/dev/null
