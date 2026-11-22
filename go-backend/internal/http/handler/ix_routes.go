@@ -148,11 +148,11 @@ func (h *Handler) ixRouteCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	request.LandingHost = strings.Trim(strings.TrimSpace(request.LandingHost), "[]")
 	if request.LandingHost == "" || strings.ContainsAny(request.LandingHost, "/?#") {
-		response.WriteJSON(w, response.Err(500, "Landing IP 或域名无效"))
+		response.WriteJSON(w, response.Err(500, "落地 IP 或域名无效"))
 		return
 	}
 	if err := validateIPv4OnlyHost(r.Context(), request.LandingHost); err != nil {
-		response.WriteJSON(w, response.Err(500, "Landing 目标无效: "+err.Error()))
+		response.WriteJSON(w, response.Err(500, "落地目标无效: "+err.Error()))
 		return
 	}
 	route := &model.IXRoute{PathProfileID: request.PathProfileID, Name: request.Name, LandingHost: request.LandingHost, LandingPort: request.LandingPort, ProtocolMode: request.ProtocolMode}
@@ -427,7 +427,7 @@ func (h *Handler) ixRouteUpdate(w http.ResponseWriter, r *http.Request) {
 	protocols, err := ixRouteProtocols(request.ProtocolMode)
 	if err != nil || strings.TrimSpace(request.Name) == "" || strings.TrimSpace(request.LandingHost) == "" || request.LandingPort <= 0 || request.LandingPort > 65535 || request.EntryPort < 0 || request.EntryPort > 65535 || request.IXPort < 0 || request.IXPort > 65535 {
 		if err == nil {
-			err = errors.New("业务名称、Landing 和端口参数无效")
+			err = errors.New("业务名称、落地和端口参数无效")
 		}
 		response.WriteJSON(w, response.Err(500, err.Error()))
 		return
@@ -440,7 +440,7 @@ func (h *Handler) ixRouteUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.LandingHost != strings.TrimSpace(current.LandingHost) {
 		if err := validateIPv4OnlyHost(r.Context(), request.LandingHost); err != nil {
-			response.WriteJSON(w, response.Err(500, "Landing 目标无效: "+err.Error()))
+			response.WriteJSON(w, response.Err(500, "落地目标无效: "+err.Error()))
 			return
 		}
 	}

@@ -209,7 +209,7 @@ func (h *Handler) runIXRouteDiagnosis(routeID int64, payloadEcho bool) (*ixRoute
 	}
 	landingHost := strings.TrimSpace(route.LandingHost)
 	if landingHost == "" || route.LandingPort < 1 || route.LandingPort > 65535 {
-		return nil, errors.New("Landing diagnosis target is invalid")
+		return nil, errors.New("落地诊断目标无效")
 	}
 	ixPublicHost := strings.TrimSpace(resource.PublicIP)
 	if ixPublicHost == "" {
@@ -230,27 +230,27 @@ func (h *Handler) runIXRouteDiagnosis(routeID int64, payloadEcho bool) (*ixRoute
 		if protocol == "tcp" {
 			result.Legs = append(result.Legs,
 				h.tcpConnectIXLeg(profile.EntryNodeID, "gz_to_ix", entryNode.Name, ixNode.Name, ixPublicHost, route.IXPublicPort),
-				h.tcpConnectIXLeg(profile.IXNodeID, "ix_to_landing", ixNode.Name, "Landing", landingHost, route.LandingPort),
+				h.tcpConnectIXLeg(profile.IXNodeID, "ix_to_landing", ixNode.Name, "落地", landingHost, route.LandingPort),
 			)
 			if payloadEcho {
-				result.Legs = append(result.Legs, h.echoIXLeg(profile.EntryNodeID, "tcp", "end_to_end", entryNode.Name, "Landing", ixLocalProbeHost(entryNode, "tcp"), route.EntryPort, nonce))
+				result.Legs = append(result.Legs, h.echoIXLeg(profile.EntryNodeID, "tcp", "end_to_end", entryNode.Name, "落地", ixLocalProbeHost(entryNode, "tcp"), route.EntryPort, nonce))
 			} else {
-				result.Legs = append(result.Legs, unverifiedIXLeg("tcp", "end_to_end", entryNode.Name, "Landing", "controlled_payload_required", "未启用受控 Echo，TCP Connect 不能替代端到端 payload"))
+				result.Legs = append(result.Legs, unverifiedIXLeg("tcp", "end_to_end", entryNode.Name, "落地", "controlled_payload_required", "未启用受控 Echo，TCP Connect 不能替代端到端 payload"))
 			}
 			continue
 		}
 		if !payloadEcho {
 			result.Legs = append(result.Legs,
 				unverifiedIXLeg("udp", "gz_to_ix", entryNode.Name, ixNode.Name, "udp_nonce_echo_required", "UDP connect 不证明 payload 可达"),
-				unverifiedIXLeg("udp", "ix_to_landing", ixNode.Name, "Landing", "udp_nonce_echo_required", "UDP connect 不证明 payload 可达"),
-				unverifiedIXLeg("udp", "end_to_end", entryNode.Name, "Landing", "udp_nonce_echo_required", "未启用受控 UDP Echo"),
+					unverifiedIXLeg("udp", "ix_to_landing", ixNode.Name, "落地", "udp_nonce_echo_required", "UDP connect 不证明 payload 可达"),
+					unverifiedIXLeg("udp", "end_to_end", entryNode.Name, "落地", "udp_nonce_echo_required", "未启用受控 UDP Echo"),
 			)
 			continue
 		}
 		result.Legs = append(result.Legs,
-			unverifiedIXLeg("udp", "gz_to_ix", entryNode.Name, ixNode.Name, "udp_segment_echo_unavailable", "IX 业务 Listener 会继续转发到 Landing，无独立 UDP Echo 响应时不能分段验证"),
-			h.echoIXLeg(profile.IXNodeID, "udp", "ix_to_landing", ixNode.Name, "Landing", landingHost, route.LandingPort, nonce),
-			h.echoIXLeg(profile.EntryNodeID, "udp", "end_to_end", entryNode.Name, "Landing", ixLocalProbeHost(entryNode, "udp"), route.EntryPort, nonce),
+				unverifiedIXLeg("udp", "gz_to_ix", entryNode.Name, ixNode.Name, "udp_segment_echo_unavailable", "IX 业务 Listener 会继续转发到落地，无独立 UDP Echo 响应时不能分段验证"),
+				h.echoIXLeg(profile.IXNodeID, "udp", "ix_to_landing", ixNode.Name, "落地", landingHost, route.LandingPort, nonce),
+				h.echoIXLeg(profile.EntryNodeID, "udp", "end_to_end", entryNode.Name, "落地", ixLocalProbeHost(entryNode, "udp"), route.EntryPort, nonce),
 		)
 	}
 	result.OverallStatus = overallIXProbeStatus(result.Legs)

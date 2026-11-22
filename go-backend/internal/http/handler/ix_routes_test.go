@@ -368,6 +368,9 @@ func TestIXRouteDiagnosisDoesNotMisreportUDPConnectAsPayloadSuccess(t *testing.T
 		if leg.Protocol == "udp" && leg.Status != ixProbeUnverified {
 			t.Fatalf("UDP connect was promoted to payload proof: %+v", leg)
 		}
+		if leg.Leg != "gz_to_ix" && leg.To != "落地" {
+			t.Fatalf("diagnosis exposed inconsistent landing label: %+v", leg)
+		}
 	}
 	if len(agent.commandsOfType("UdpPing")) != 0 {
 		t.Fatal("diagnosis called legacy UdpPing even though it cannot prove payload")

@@ -367,12 +367,12 @@ export default function MultiportPage() {
       return;
     }
     if (!routeForm.landingHost.trim()) {
-      toast.error("请填写 Landing IP 或域名");
+      toast.error("请填写落地 IP 或域名");
 
       return;
     }
     if (!isValidIPv4OnlyLandingHost(routeForm.landingHost)) {
-      toast.error("Landing 仅支持 IPv4 地址或具有 A 记录的域名");
+      toast.error("落地仅支持 IPv4 地址或具有 A 记录的域名");
 
       return;
     }
@@ -381,7 +381,7 @@ export default function MultiportPage() {
       landingPort < 1 ||
       landingPort > 65535
     ) {
-      toast.error("Landing 端口必须是 1-65535");
+      toast.error("落地端口必须是 1-65535");
 
       return;
     }
@@ -547,7 +547,7 @@ export default function MultiportPage() {
             多端口转发
           </h1>
           <p className="mt-1 text-sm text-default-500">
-            前置入口到 IX 路径与独立 Landing 业务
+            前置入口到 IX 路径与独立落地业务
           </p>
         </div>
         <div className="flex gap-2">
@@ -1024,7 +1024,7 @@ export default function MultiportPage() {
               />
               <Input
                 description="IPv4 地址或具有 A 记录的域名"
-                label="Landing IP / 域名"
+                label="落地 IP / 域名"
                 placeholder="192.0.2.10 或 example.com"
                 value={routeForm.landingHost}
                 onChange={(event) =>
@@ -1035,7 +1035,7 @@ export default function MultiportPage() {
                 }
               />
               <Input
-                label="Landing 端口"
+                label="落地端口"
                 type="number"
                 value={routeForm.landingPort}
                 onChange={(event) =>
@@ -1115,7 +1115,7 @@ export default function MultiportPage() {
               <div className="min-w-0">
                 <div className="text-sm font-medium">受控 Echo payload</div>
                 <div className="mt-1 text-xs text-default-500">
-                  仅在 Landing 是受控 TCP/UDP Echo 服务时启用；否则 UDP 保持
+                  仅在落地是受控 TCP/UDP Echo 服务时启用；否则 UDP 保持
                   UNVERIFIED
                 </div>
               </div>
