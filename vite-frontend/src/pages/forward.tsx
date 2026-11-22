@@ -4978,13 +4978,13 @@ export default function ForwardPage() {
                   <Input
                     description={
                       currentTunnelPortRange
-                        ? `指定入口端口，留空自动分配 (允许范围: ${currentTunnelPortRange.min}-${currentTunnelPortRange.max})`
-                        : "指定入口端口，留空则从节点可用端口中自动分配"
+                        ? `留空随机分配 10000-65535 可用端口；手动范围: ${currentTunnelPortRange.min}-${currentTunnelPortRange.max}`
+                        : "留空随机分配 10000-65535 可用端口；手动端口按节点范围校验"
                     }
                     errorMessage={errors.inPort}
                     isInvalid={!!errors.inPort}
                     label="入口端口"
-                    placeholder="留空则自动分配可用端口"
+                    placeholder="留空随机分配高位可用端口"
                     type="number"
                     value={form.inPort !== null ? form.inPort.toString() : ""}
                     variant="bordered"
@@ -5571,7 +5571,7 @@ export default function ForwardPage() {
             {importFormat === "flvx" ? (
               <>
                 <p className="text-small text-default-500">
-                  格式：目标地址|规则名称|入口端口，每行一个，入口端口留空将自动分配可用端口
+                  格式：目标地址|规则名称|入口端口，每行一个；入口端口留空将随机分配 10000-65535 可用端口
                 </p>
                 <p className="text-small text-default-400">
                   目标地址支持单个地址(如：example.com:8080)或多个地址用逗号分隔(如：3.3.3.3:3,4.4.4.4:4)
@@ -5583,7 +5583,7 @@ export default function ForwardPage() {
                   ny格式：JSON对象，支持多个目标地址（负载均衡），按所选隧道导入
                 </p>
                 <p className="text-small text-default-400">
-                  格式：&#123;&quot;dest&quot;:[&quot;地址:端口&quot;],&quot;listen_port&quot;:端口,&quot;name&quot;:&quot;名称&quot;&#125;（listen_port可省略，自动分配端口）
+                  格式：&#123;&quot;dest&quot;:[&quot;地址:端口&quot;],&quot;listen_port&quot;:端口,&quot;name&quot;:&quot;名称&quot;&#125;（listen_port 可省略，随机分配 10000-65535 可用端口）
                 </p>
               </>
             )}

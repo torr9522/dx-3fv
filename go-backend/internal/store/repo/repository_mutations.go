@@ -1,11 +1,9 @@
 package repo
 
 import (
-	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
-	"math/big"
 	"sort"
 	"strconv"
 	"strings"
@@ -550,7 +548,7 @@ func (r *Repository) PickRandomNodePortTx(tx *gorm.DB, nodeID int64, allocated m
 	return r.pickNodePortTx(tx, nodeID, allocated, excludeTunnelID, true)
 }
 
-func (r *Repository) pickNodePortTx(tx *gorm.DB, nodeID int64, allocated map[int64]int, excludeTunnelID int64, randomPick bool) (int, error) {
+func (r *Repository) pickNodePortTx(tx *gorm.DB, nodeID int64, allocated map[int64]int, excludeTunnelID int64, _ bool) (int, error) {
 	if tx == nil {
 		return 0, errors.New("database unavailable")
 	}
@@ -584,7 +582,7 @@ func (r *Repository) pickNodePortTx(tx *gorm.DB, nodeID int64, allocated map[int
 	}
 	var available []int
 	for _, candidate := range candidates {
-		if candidate <= 0 {
+		if candidate < AutoEntryPortMin || candidate > AutoEntryPortMax {
 			continue
 		}
 		if used[candidate] {
@@ -596,17 +594,11 @@ func (r *Repository) pickNodePortTx(tx *gorm.DB, nodeID int64, allocated map[int
 	if len(available) == 0 {
 		return 0, errors.New("节点端口已满，无可用端口")
 	}
-	if !randomPick {
-		allocated[nodeID] = available[0]
-		return available[0], nil
-	}
-
-	idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(available))))
+	order, err := randomPortOrder(0, len(available)-1)
 	if err != nil {
-		allocated[nodeID] = available[0]
-		return available[0], nil
+		return 0, err
 	}
-	port := available[idx.Int64()]
+	port := available[order[0]]
 	allocated[nodeID] = port
 	return port, nil
 }
@@ -838,7 +830,7 @@ func (r *Repository) ReplaceForwardPorts(forwardID int64, entries []struct {
 	Port   int
 	InIP   string
 }, sequential ...bool) error {
-	return r.replaceForwardPorts(forwardID, entries, len(sequential) > 0 && sequential[0], false)
+	return r.replaceForwardPorts(forwardID, entries, len(sequential) > 0 && sequential[0], false, nil)
 }
 
 // ReplaceForwardPortsIndividually preserves independent ports when adding entry nodes.
@@ -847,14 +839,30 @@ func (r *Repository) ReplaceForwardPortsIndividually(forwardID int64, entries []
 	Port   int
 	InIP   string
 }, sequential bool) error {
-	return r.replaceForwardPorts(forwardID, entries, sequential, true)
+	return r.replaceForwardPorts(forwardID, entries, sequential, true, nil)
+}
+
+// ReallocateForwardPortsExcluding atomically replaces automatic reservations
+// without reconsidering ports that already failed a Runtime bind attempt.
+func (r *Repository) ReallocateForwardPortsExcluding(forwardID int64, entries []struct {
+	NodeID int64
+	Port   int
+	InIP   string
+}, individually bool, excludedPorts []int) error {
+	excluded := make(map[int]bool, len(excludedPorts))
+	for _, port := range excludedPorts {
+		if port > 0 {
+			excluded[port] = true
+		}
+	}
+	return r.replaceForwardPorts(forwardID, entries, false, individually, excluded)
 }
 
 func (r *Repository) replaceForwardPorts(forwardID int64, entries []struct {
 	NodeID int64
 	Port   int
 	InIP   string
-}, sequential, individually bool) error {
+}, sequential, individually bool, excluded map[int]bool) error {
 	if r == nil || r.db == nil {
 		return errors.New("repository not initialized")
 	}
@@ -873,7 +881,7 @@ func (r *Repository) replaceForwardPorts(forwardID int64, entries []struct {
 		autoPort := 0
 		if len(autoIDs) > 0 && !individually {
 			var err error
-			autoPort, err = r.selectForwardPortTx(tx, autoIDs, 0, forwardID, sequential)
+			autoPort, err = r.selectForwardPortTx(tx, autoIDs, 0, forwardID, sequential, excluded)
 			if err != nil {
 				return err
 			}
@@ -883,7 +891,7 @@ func (r *Repository) replaceForwardPorts(forwardID int64, entries []struct {
 			if entries[i].Port <= 0 {
 				if individually {
 					var err error
-					entries[i].Port, err = r.selectForwardPortTx(tx, []int64{entries[i].NodeID}, 0, forwardID, sequential)
+					entries[i].Port, err = r.selectForwardPortTx(tx, []int64{entries[i].NodeID}, 0, forwardID, sequential, excluded)
 					if err != nil {
 						return err
 					}

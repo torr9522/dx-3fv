@@ -447,7 +447,7 @@ export default function SingleForwardPage() {
               ))}
             </Select>
             <Input
-              description="留空自动分配；SSH 和实际占用端口不会被抢占"
+              description="留空随机分配 10000-65535 可用端口；手动填写可使用节点范围内的其他空闲端口"
               errorMessage={errors.inPort}
               isInvalid={Boolean(errors.inPort)}
               label="前置入口端口"

@@ -11,6 +11,46 @@ import (
 	"strings"
 )
 
+const AutoEntryPortMin = 10000
+const AutoEntryPortMax = 65535
+
+func randomPortOrder(start, end int) ([]int, error) {
+	if start > end {
+		return nil, errors.New("invalid random port range")
+	}
+	size := end - start + 1
+	offsetValue, err := rand.Int(rand.Reader, big.NewInt(int64(size)))
+	if err != nil {
+		return nil, fmt.Errorf("generate random port start: %w", err)
+	}
+	step := 1
+	if size > 3 {
+		for {
+			candidate, randomErr := rand.Int(rand.Reader, big.NewInt(int64(size-2)))
+			if randomErr != nil {
+				return nil, fmt.Errorf("generate random port step: %w", randomErr)
+			}
+			step = int(candidate.Int64()) + 2
+			if greatestCommonDivisor(step, size) == 1 {
+				break
+			}
+		}
+	}
+	offset := int(offsetValue.Int64())
+	ports := make([]int, size)
+	for i := range ports {
+		ports[i] = start + (offset+i*step)%size
+	}
+	return ports, nil
+}
+
+func greatestCommonDivisor(a, b int) int {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	return a
+}
+
 // lockPortAllocationTx serializes reservation mutations across processes sharing a database.
 // PostgreSQL uses a transaction-scoped advisory lock; SQLite acquires its writer
 // lock without changing any row, including when the node table is empty.
@@ -79,11 +119,15 @@ func (r *Repository) usedPortSetTx(tx *gorm.DB, nodeID, excludeForwardID, exclud
 }
 
 // Selection and insert must be in the same transaction after locking all nodes.
-func (r *Repository) selectForwardPortTx(tx *gorm.DB, ids []int64, requested int, excludeForwardID int64, sequential bool) (int, error) {
+func (r *Repository) selectForwardPortTx(tx *gorm.DB, ids []int64, requested int, excludeForwardID int64, _ bool, excludedSets ...map[int]bool) (int, error) {
 	if len(ids) == 0 {
 		return 0, errors.New("隧道没有可用入口节点")
 	}
 	var common []int
+	excluded := map[int]bool{}
+	if len(excludedSets) > 0 && excludedSets[0] != nil {
+		excluded = excludedSets[0]
+	}
 	for i, id := range ids {
 		var node model.Node
 		if err := tx.Where("id = ?", id).First(&node).Error; err != nil {
@@ -110,6 +154,9 @@ func (r *Repository) selectForwardPortTx(tx *gorm.DB, ids []int64, requested int
 		}
 		available := map[int]bool{}
 		for _, p := range candidates {
+			if requested == 0 && (p < AutoEntryPortMin || p > AutoEntryPortMax || excluded[p]) {
+				continue
+			}
 			if p <= 65535 && !used[p] && (remote.Start <= 0 || remote.End <= 0 || (p >= remote.Start && p <= remote.End)) {
 				available[p] = true
 			}
@@ -142,14 +189,11 @@ func (r *Repository) selectForwardPortTx(tx *gorm.DB, ids []int64, requested int
 	if len(common) == 0 {
 		return 0, errors.New("节点端口已满，无可用端口")
 	}
-	if sequential {
-		return common[0], nil
-	}
-	idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(common))))
+	order, err := randomPortOrder(0, len(common)-1)
 	if err != nil {
 		return 0, err
 	}
-	return common[idx.Int64()], nil
+	return common[order[0]], nil
 }
 
 // checkPeerRuntimePortTx permits only a verified federation-forward attachment

@@ -14,21 +14,16 @@ func TestNormalizeSequentialPortConfigValue(t *testing.T) {
 	}
 }
 
-func TestSequentialPortConfigReadsRepositoryAndDefaultsOff(t *testing.T) {
+func TestLegacySequentialPortConfigCannotOverrideRandomPolicy(t *testing.T) {
 	_, r := setupConfigAccessTestRouter(t)
 	h := &Handler{repo: r}
 	if h.isSequentialPortEnabled() {
 		t.Fatal("missing config must preserve random allocation")
 	}
-	for _, tc := range []struct {
-		value string
-		want  bool
-	}{
-		{"true", true}, {" TRUE ", true}, {"false", false}, {"invalid", false},
-	} {
-		seedConfigValue(t, r, sequentialPortConfigKey, tc.value)
-		if got := h.isSequentialPortEnabled(); got != tc.want {
-			t.Fatalf("config %q: got %v, want %v", tc.value, got, tc.want)
+	for _, value := range []string{"true", " TRUE ", "false", "invalid"} {
+		seedConfigValue(t, r, sequentialPortConfigKey, value)
+		if got := h.isSequentialPortEnabled(); got {
+			t.Fatalf("legacy config %q overrode the random policy", value)
 		}
 	}
 }

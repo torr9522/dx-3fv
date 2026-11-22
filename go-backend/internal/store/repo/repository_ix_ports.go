@@ -1,10 +1,8 @@
 package repo
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/big"
 	"sort"
 	"strings"
 	"time"
@@ -405,40 +403,7 @@ func ixPortCandidates(tx *gorm.DB, pool *model.IXPortPool, requested, autoMinPor
 }
 
 func randomIXPortOrder(start, end int) ([]int, error) {
-	if start > end {
-		return nil, errors.New("invalid random port range")
-	}
-	size := end - start + 1
-	offsetValue, err := rand.Int(rand.Reader, big.NewInt(int64(size)))
-	if err != nil {
-		return nil, fmt.Errorf("generate random port start: %w", err)
-	}
-	step := 1
-	if size > 3 {
-		for {
-			candidate, randomErr := rand.Int(rand.Reader, big.NewInt(int64(size-2)))
-			if randomErr != nil {
-				return nil, fmt.Errorf("generate random port step: %w", randomErr)
-			}
-			step = int(candidate.Int64()) + 2
-			if greatestCommonDivisor(step, size) == 1 {
-				break
-			}
-		}
-	}
-	offset := int(offsetValue.Int64())
-	ports := make([]int, size)
-	for i := range ports {
-		ports[i] = start + (offset+i*step)%size
-	}
-	return ports, nil
-}
-
-func greatestCommonDivisor(a, b int) int {
-	for b != 0 {
-		a, b = b, a%b
-	}
-	return a
+	return randomPortOrder(start, end)
 }
 
 func ixPortAlreadyOwned(tx *gorm.DB, nodeID int64, port int, protocols []string) (bool, error) {

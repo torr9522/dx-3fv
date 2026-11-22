@@ -18,7 +18,6 @@ import (
 
 const ixRouteOwnerEntry = "ix_route_entry"
 const ixRouteOwnerIX = "ix_route_ix"
-const ixRouteEntryAutoMinPort = 10000
 
 func ixRoutePortAllocationRequest(poolID int64, requestedPort int, protocols []string, ownerType string, ownerID int64, entryLane bool) repo.IXPortAllocationRequest {
 	request := repo.IXPortAllocationRequest{
@@ -26,7 +25,7 @@ func ixRoutePortAllocationRequest(poolID int64, requestedPort int, protocols []s
 		OwnerType: ownerType, OwnerID: ownerID, Manual: requestedPort > 0,
 	}
 	if entryLane && requestedPort == 0 {
-		request.AutoMinPort = ixRouteEntryAutoMinPort
+		request.AutoMinPort = repo.AutoEntryPortMin
 		request.RandomAuto = true
 	}
 	return request

@@ -79,10 +79,24 @@ func runConcurrentPortAllocation(t *testing.T, a, b *Repository) {
 		}
 		seen[k] = true
 	}
+	explicitPort := 0
+	for port := 20000; port <= 20031; port++ {
+		if !seen[fmt.Sprintf("1:%d", port)] && !seen[fmt.Sprintf("2:%d", port)] {
+			explicitPort = port
+			break
+		}
+	}
+	if explicitPort == 0 {
+		t.Fatal("no free explicit test port remained")
+	}
 	explicitStart := make(chan struct{})
 	explicitResults := make(chan error, 2)
 	for _, r := range []*Repository{a, b} {
-		go func(r *Repository) { <-explicitStart; _, err := portTestCreate(r, 20031, 1, 2); explicitResults <- err }(r)
+		go func(r *Repository) {
+			<-explicitStart
+			_, err := portTestCreate(r, explicitPort, 1, 2)
+			explicitResults <- err
+		}(r)
 	}
 	close(explicitStart)
 	success := 0
@@ -93,13 +107,6 @@ func runConcurrentPortAllocation(t *testing.T, a, b *Repository) {
 	}
 	if success != 1 {
 		t.Fatalf("explicit port race: %d successes, want exactly 1", success)
-	}
-	for p := 20000; p < 20000+count; p++ {
-		for _, n := range []int{1, 2} {
-			if !seen[fmt.Sprintf("%d:%d", n, p)] {
-				t.Fatalf("gap at %d:%d", n, p)
-			}
-		}
 	}
 }
 func TestAtomicPortAllocationRejectsConflictsAndExhaustion(t *testing.T) {
@@ -201,15 +208,17 @@ func TestAtomicPortAllocationRespectsRangesAndPendingCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := r.GetMinForwardPort(id).Int64; got != 23002 {
-		t.Fatalf("got %d, want23002", got)
+	firstPort := int(r.GetMinForwardPort(id).Int64)
+	if firstPort != 23002 && firstPort != 23004 {
+		t.Fatalf("allocated invalid common port %d", firstPort)
 	}
 	id2, err := portTestCreate(r, 0, 1, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := r.GetMinForwardPort(id2).Int64; got != 23004 {
-		t.Fatalf("got %d, want23004", got)
+	secondPort := int(r.GetMinForwardPort(id2).Int64)
+	if secondPort == firstPort || (secondPort != 23002 && secondPort != 23004) {
+		t.Fatalf("second common port %d conflicts with first %d", secondPort, firstPort)
 	}
 	if err := r.DeleteForwardCascade(id); err != nil {
 		t.Fatal(err)
@@ -218,8 +227,8 @@ func TestAtomicPortAllocationRespectsRangesAndPendingCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := r.GetMinForwardPort(id3).Int64; got != 23002 {
-		t.Fatalf("released gap not reused: %d", got)
+	if got := int(r.GetMinForwardPort(id3).Int64); got != firstPort {
+		t.Fatalf("released port was not reusable: got %d want %d", got, firstPort)
 	}
 }
 
@@ -244,11 +253,67 @@ func TestAtomicPortAllocationIndependentNewEntries(t *testing.T) {
 	if err := r.db.Order("node_id").Find(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 2 || rows[0].Port != 24000 || rows[1].Port != 25000 {
+	if len(rows) != 2 || rows[0].Port < 24000 || rows[0].Port > 24001 || rows[1].Port < 25000 || rows[1].Port > 25001 {
 		t.Fatalf("unexpected independent allocation: %+v", rows)
 	}
-	if _, err := r.CreateFederationTunnel("conflict", 1, "tcp", 0, 1, 24000); err == nil {
+	if _, err := r.CreateFederationTunnel("conflict", 1, "tcp", 0, 1, rows[0].Port); err == nil {
 		t.Fatal("federation collision accepted")
+	}
+}
+
+func TestUnifiedAutomaticEntryPolicyKeepsManualLowPorts(t *testing.T) {
+	r, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if err := r.db.Create(&model.Node{ID: 1, Port: "8000,9999,10000-10020"}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	for owner := 0; owner < 6; owner++ {
+		id, err := portTestCreate(r, 0, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if port := int(r.GetMinForwardPort(id).Int64); port < AutoEntryPortMin || port > AutoEntryPortMax {
+			t.Fatalf("automatic forward port %d is outside policy", port)
+		}
+	}
+	if _, err := portTestCreate(r, 8000, 1); err != nil {
+		t.Fatalf("manual port 8000 was rejected: %v", err)
+	}
+	if _, err := portTestCreate(r, 9999, 1); err != nil {
+		t.Fatalf("manual port 9999 was rejected: %v", err)
+	}
+	if _, err := portTestCreate(r, 8000, 1); err == nil {
+		t.Fatal("occupied manual port 8000 was accepted")
+	}
+}
+
+func TestForwardEditClearExcludesPreviousPort(t *testing.T) {
+	r, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if err := r.db.Create(&model.Node{ID: 1, Port: "10000-10010"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	id, err := portTestCreate(r, 10000, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := []struct {
+		NodeID int64
+		Port   int
+		InIP   string
+	}{{NodeID: 1}}
+	if err := r.ReallocateForwardPortsExcluding(id, entries, true, []int{10000}); err != nil {
+		t.Fatal(err)
+	}
+	if port := int(r.GetMinForwardPort(id).Int64); port < AutoEntryPortMin || port == 10000 {
+		t.Fatalf("edit-clear kept the old port: %d", port)
 	}
 }
 

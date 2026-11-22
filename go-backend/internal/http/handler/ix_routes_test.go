@@ -14,6 +14,7 @@ import (
 
 	"go-backend/internal/security"
 	"go-backend/internal/store/model"
+	"go-backend/internal/store/repo"
 )
 
 func connectAdditionalIXTestNode(t *testing.T, agent *cleanupAgent, nodeID int64, secret string) {
@@ -188,7 +189,7 @@ func TestIXRouteAutomaticEntryPortsUseRandomHighRange(t *testing.T) {
 	first := createIXRouteThroughHandler(t, agent, profile.ID, "auto-entry-first", 0, 38001)
 	second := createIXRouteThroughHandler(t, agent, profile.ID, "auto-entry-second", 0, 38002)
 	for _, route := range []*model.IXRoute{first, second} {
-		if route.EntryPort < ixRouteEntryAutoMinPort || route.EntryPort > 65535 {
+		if route.EntryPort < repo.AutoEntryPortMin || route.EntryPort > repo.AutoEntryPortMax {
 			t.Fatalf("automatic entry port is outside policy: %+v", route)
 		}
 		leases, err := agent.h.repo.ListIXPortLeases(ixRouteOwnerEntry, route.ID)
@@ -336,10 +337,10 @@ func TestIXRouteAutomaticEntryPortRetriesRuntimeBindConflictInHighRange(t *testi
 		return true, ""
 	}
 	route := createIXRouteThroughHandler(t, agent, profile.ID, "entry-retry", 0, 38001)
-	if failedPort < ixRouteEntryAutoMinPort {
+	if failedPort < repo.AutoEntryPortMin {
 		t.Fatalf("injected conflict port %d is below policy minimum", failedPort)
 	}
-	if route.EntryPort < ixRouteEntryAutoMinPort || route.EntryPort == failedPort {
+	if route.EntryPort < repo.AutoEntryPortMin || route.EntryPort == failedPort {
 		t.Fatalf("entry retry did not choose another high port: failed=%d route=%+v", failedPort, route)
 	}
 }
@@ -617,7 +618,7 @@ func TestIXRouteEditClearedEntryPortUsesRandomHighRange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.EntryPort < ixRouteEntryAutoMinPort || stored.EntryPort == route.EntryPort {
+	if stored.EntryPort < repo.AutoEntryPortMin || stored.EntryPort == route.EntryPort {
 		t.Fatalf("cleared entry port did not use automatic high range: before=%d after=%d", route.EntryPort, stored.EntryPort)
 	}
 	if stored.IXPublicPort != 38001 {

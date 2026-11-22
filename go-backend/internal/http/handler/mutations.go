@@ -1791,19 +1791,12 @@ func (h *Handler) resolvePortForNewEntryNode(nodeID int64, referencePort int, fo
 	return 0
 }
 
-// sequentialPortConfigKey 是「未指定端口时按端口范围顺次分配」开关的配置键。
+// sequentialPortConfigKey remains readable for old databases, but automatic
+// entry ports now always use the shared random policy.
 const sequentialPortConfigKey = "sequential_port_enabled"
 
-// isSequentialPortEnabled 返回是否开启了顺次分配端口（默认关闭，保持随机分配）。
 func (h *Handler) isSequentialPortEnabled() bool {
-	if h == nil || h.repo == nil {
-		return false
-	}
-	value, err := h.repo.GetViteConfigValue(sequentialPortConfigKey)
-	if err != nil {
-		return false
-	}
-	return strings.EqualFold(strings.TrimSpace(value), "true")
+	return false
 }
 
 func (h *Handler) tunnelDelete(w http.ResponseWriter, r *http.Request) {
@@ -2481,7 +2474,8 @@ func (h *Handler) forwardCreate(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, response.Err(-2, err.Error()))
 		return
 	}
-	if err := h.syncForwardServices(createdForward, "UpdateService", true); err != nil {
+	createdForward, _, err = h.syncForwardServicesWithAutoPortRetry(createdForward, direct, port <= 0)
+	if err != nil {
 		_ = h.deleteForwardByID(forwardID)
 		response.WriteJSON(w, response.ErrDefault(err.Error()))
 		return
@@ -2648,7 +2642,9 @@ func (h *Handler) forwardUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	port := asInt(req["inPort"], 0)
-	if port <= 0 {
+	_, hasRequestedPort := req["inPort"]
+	autoPortRequested := hasRequestedPort && port <= 0
+	if port <= 0 && !autoPortRequested {
 		minPort := h.repo.GetMinForwardPort(id)
 		if minPort.Valid {
 			port = int(minPort.Int64)
@@ -2730,7 +2726,19 @@ func (h *Handler) forwardUpdate(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, response.Err(-2, err.Error()))
 		return
 	}
-	if hasInIP {
+	if autoPortRequested {
+		entries := buildForwardPortEntriesWithPreservedInIP(fwdEntryNodes, oldPorts, 0)
+		if hasInIP {
+			for i := range entries {
+				entries[i].InIP = inIp
+			}
+		}
+		excluded := make([]int, 0, len(oldPorts))
+		for _, item := range oldPorts {
+			excluded = append(excluded, item.Port)
+		}
+		err = h.repo.ReallocateForwardPortsExcluding(id, entries, direct, excluded)
+	} else if hasInIP {
 		if direct {
 			err = h.repo.ReplaceForwardPortsIndividually(id, []forwardPortReplaceEntry{{NodeID: fwdEntryNodes[0], Port: port, InIP: inIp}}, h.isSequentialPortEnabled())
 		} else {
@@ -2771,7 +2779,7 @@ func (h *Handler) forwardUpdate(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(tunnelServiceBindRetryDelay)
 	}
 
-	syncWarnings, err := h.syncForwardServicesWithWarnings(updatedForward, "UpdateService", true)
+	updatedForward, syncWarnings, err := h.syncForwardServicesWithAutoPortRetry(updatedForward, direct, autoPortRequested)
 	if err != nil {
 		h.rollbackForwardMutation(forward, oldPorts)
 		response.WriteJSON(w, response.ErrDefault(err.Error()))
@@ -5294,6 +5302,45 @@ func (h *Handler) replaceForwardPortsWithRecords(forwardID int64, ports []forwar
 		entries[i] = forwardPortReplaceEntry{NodeID: fp.NodeID, Port: fp.Port, InIP: fp.InIP}
 	}
 	return h.repo.ReplaceForwardPorts(forwardID, entries, h.isSequentialPortEnabled())
+}
+
+const forwardAutoPortRuntimeRetryLimit = 8
+
+func (h *Handler) syncForwardServicesWithAutoPortRetry(forward *forwardRecord, direct, automatic bool) (*forwardRecord, []string, error) {
+	if h == nil || h.repo == nil || forward == nil {
+		return forward, nil, errors.New("invalid forward auto-port context")
+	}
+	current := forward
+	excludedPorts := make([]int, 0, forwardAutoPortRuntimeRetryLimit)
+	for attempt := 0; attempt < forwardAutoPortRuntimeRetryLimit; attempt++ {
+		warnings, err := h.syncForwardServicesWithWarnings(current, "UpdateService", true)
+		if err == nil {
+			return current, warnings, nil
+		}
+		if !automatic || !isAddressAlreadyInUseError(err) {
+			return current, warnings, err
+		}
+		ports, listErr := h.listForwardPorts(current.ID)
+		if listErr != nil {
+			return current, warnings, listErr
+		}
+		entries := make([]forwardPortReplaceEntry, 0, len(ports))
+		for _, item := range ports {
+			excludedPorts = append(excludedPorts, item.Port)
+			entries = append(entries, forwardPortReplaceEntry{NodeID: item.NodeID, InIP: item.InIP})
+		}
+		if attempt == forwardAutoPortRuntimeRetryLimit-1 {
+			return current, warnings, fmt.Errorf("自动入口端口在 %d 次 Runtime 冲突后仍无法分配: %w", forwardAutoPortRuntimeRetryLimit, err)
+		}
+		if err := h.repo.ReallocateForwardPortsExcluding(current.ID, entries, direct, excludedPorts); err != nil {
+			return current, warnings, fmt.Errorf("自动入口端口重分配失败: %w", err)
+		}
+		current, err = h.getForwardRecord(current.ID)
+		if err != nil {
+			return current, warnings, err
+		}
+	}
+	return current, nil, errors.New("automatic forward port retry exhausted")
 }
 
 func (h *Handler) rollbackForwardMutation(oldForward *forwardRecord, oldPorts []forwardPortRecord) {
